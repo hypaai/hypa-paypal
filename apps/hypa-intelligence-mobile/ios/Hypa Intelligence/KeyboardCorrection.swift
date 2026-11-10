@@ -369,7 +369,7 @@ static func hasApostropheEnding(_ word: String) -> Bool {
     word.range(of: "'\\p{L}{0,2}$", options: .regularExpression) != nil
   }
 
-  func evaluate(word: String, previousWord: String) -> CorrectionDecision {
+  func evaluate(word: String, previousWord: String, taps: [TapFit]) -> CorrectionDecision {
     guard word.allSatisfy({ $0.isLetter || $0 == "'" }), !Self.hasApostropheEnding(word) else { return .keep(word) }
     guard corpus.isReady else { return .keep(word) }
 
@@ -380,7 +380,25 @@ static func hasApostropheEnding(_ word: String) -> Bool {
         confidence: 1)
     }
     guard word.count >= Self.minWordLength else { return .keep(word) }
-    if personal.contains(word) || corpus.contains(normalized) { return .keep(word) }
+    if personal.contains(word) { return .keep(word) }
+    if corpus.contains(normalized) {
+      // A real but uncommon word (for example "tome") may be a slip for a common one the taps clearly point to.
+      if corpus.isCommon(normalized) || word.first?.isUppercase == true { return .keep(word) }
+      return tapDecision(
+        word,
+        TapDecoder.best(
+          normalized, taps: taps, candidates: corpus.commonOfLength(normalized.count),
+          bonus: TapDecoder.uncommonWordBonus))
+    }
+
+    if let pair = TapDecoder.split(normalized, taps: taps, isCommon: corpus.isCommon) {
+      let joined = "\(corpus.canonical(pair.0) ?? pair.0) \(corpus.canonical(pair.1) ?? pair.1)"
+      return CorrectionDecision(
+        original: word, action: .autoCorrect,
+        replacement: matchCapitalization(of: word, replacement: joined), confidence: 1)
+    }
+
+    let tapWord = TapDecoder.best(normalized, taps: taps, candidates: corpus.commonOfLength(normalized.count))
 
     var expected: [String: Float] = [:]
     for learned in personal.following(previousWord, limit: Self.contextDepth) {
@@ -444,6 +462,13 @@ static func hasApostropheEnding(_ word: String) -> Bool {
       }
     }
 
+    // Taps can only rank words of the same length, so a missing or extra letter, or a text split, stays with the text-based logic.
+    if knownSingle.isEmpty, let tapWord,
+      finalBest.map({ !$0.isSplit && $0.text.count == normalized.count }) ?? true
+    {
+      return tapDecision(word, tapWord)
+    }
+
     guard let best = finalBest else { return .keep(word) }
 
     let replacement: String
@@ -460,6 +485,14 @@ static func hasApostropheEnding(_ word: String) -> Bool {
       action: .autoCorrect,
       replacement: replacement,
       confidence: best.typoFactor)
+  }
+
+  private func tapDecision(_ word: String, _ tapWord: String?) -> CorrectionDecision {
+    guard let tapWord else { return .keep(word) }
+    return CorrectionDecision(
+      original: word, action: .autoCorrect,
+      replacement: matchCapitalization(of: word, replacement: corpus.canonical(tapWord) ?? tapWord),
+      confidence: 1)
   }
 
   private func missingApostrophe(_ normalized: String) -> String? {

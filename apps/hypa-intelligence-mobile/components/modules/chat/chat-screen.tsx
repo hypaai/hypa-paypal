@@ -9,7 +9,6 @@ import {
   Alert,
   FlatList,
   Image,
-  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -18,6 +17,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { router, useFocusEffect } from "expo-router";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -27,12 +27,12 @@ import {
 import { useIsFocused } from "@react-navigation/native";
 import {
   AlertCircle,
-  ArrowLeft,
   ArrowUp,
   Camera,
   Check,
   ChevronDown,
   ChevronRight,
+  Download,
   History,
   ImagePlus,
   Info,
@@ -47,6 +47,7 @@ import {
   Waves,
   X,
 } from "lucide-react-native";
+import { PinnedCustomers } from "@/components/modules/bridge/pinned-customers";
 import { TypingDots } from "@/components/shared/typing-dots";
 import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Markdown from "react-native-markdown-display";
@@ -77,14 +78,63 @@ import { useAiConsent } from "@/hooks/use-ai-consent";
 import { useThemeColors } from "@/hooks/use-theme-color";
 import { useToast } from "@/lib/toast";
 import { fitChatImage } from "@/lib/chat-turn";
+import { claimCamera } from "@/lib/keyboard-link";
 import { shareAudioFromUri } from "@/lib/share-audio";
 import { languageCodeToName } from "@/lib/model-languages";
 import { synthesizeSpeech } from "@/lib/product-api";
 import { FONTS } from "@/constants/fonts";
 import { Text } from "@/components/ui/text";
-import { File } from "expo-file-system";
 import { PaymentApprovalRow } from "@/components/modules/chat/payment-approval-sheet";
 import { isPayPalUrl } from "@hypa/intelligence-core/payment-link";
+import { File, Paths } from "expo-file-system";
+import { savePicture } from "hypa-keyboard-storage";
+import { Asset } from "expo-asset";
+
+/** `image` is a bundled sample photo attached with the starter. */
+const STARTERS: { text: string; image?: number }[] = [
+  { text: "Make a flyer: Ada's Tailoring, open Saturdays, in Igbo and English." },
+  {
+    text: "Translate this screenshot to Swahili and tell me what it says.",
+    image: require("../../../assets/images/starters/screenshot.jpg"),
+  },
+  {
+    text: "Translate this image to Efik, make it more polite, give me the image and read it out.",
+    image: require("../../../assets/images/starters/notice.jpg"),
+  },
+];
+
+/** A picture's type from its first bytes: JPEG, WebP or PNG. */
+function pictureType(file: File) {
+  const handle = file.open();
+  const head = handle.readBytes(12);
+  handle.close();
+  if (head[0] === 0xff && head[1] === 0xd8) return { ext: "jpg", mime: "image/jpeg" };
+  if (String.fromCharCode(...head.slice(8, 12)) === "WEBP") return { ext: "webp", mime: "image/webp" };
+  return { ext: "png", mime: "image/png" };
+}
+
+/** Resizes and re-encodes a photo as the JPEG the agent accepts. */
+async function toChatImage(
+  uri: string,
+  width: number,
+  height: number,
+): Promise<ChatImage> {
+  const context = ImageManipulator.manipulate(uri);
+  context.resize(fitChatImage(width, height));
+  const rendered = await context.renderAsync();
+  try {
+    const image = await rendered.saveAsync({
+      format: SaveFormat.JPEG,
+      compress: 0.8,
+      base64: true,
+    });
+    if (!image.base64) throw new Error("Unable to prepare this photo.");
+    return { uri: image.uri, data: image.base64, mime: "image/jpeg" };
+  } finally {
+    rendered.release();
+    context.release();
+  }
+}
 
 /**
  * A checkout link in the thread belongs to the customer. Opening it would put
@@ -96,21 +146,27 @@ function openChatLink(url: string) {
   return false;
 }
 
-const STARTERS = [
-  "Make a flyer: Ada's Tailoring, open Saturdays, in Igbo and English.",
-  "Translate this screenshot to Swahili and tell me what it says.",
-  "Translate this image to Efik, make it more polite, give me the image and read it out.",
-];
-
 export function ChatScreen({
   id,
   resetKey,
   initialDraft,
+  openCamera,
+  fromPhotos,
+  openPhoto,
+  openHistory,
 }: {
   id?: string;
   resetKey?: string;
   /** Text to prefill, e.g. from the keyboard's "Open in Hypa". */
   initialDraft?: string;
+  /** Set by the keyboard's camera button; a new value opens the camera once. */
+  openCamera?: string;
+  /** With `openCamera`: the keyboard's Photos pill, so the photo library opens instead. */
+  fromPhotos?: boolean;
+  /** Set by the keyboard's Save on iOS: opens this picture so it can be saved. */
+  openPhoto?: string;
+  /** Set when the owner leaves a customer's chat through its history button: opens the history list. */
+  openHistory?: boolean;
 }) {
   const chat = useAgentChat(id, resetKey);
   const colors = useThemeColors();
@@ -132,7 +188,10 @@ export function ChatScreen({
   const [draft, setDraft] = useState("");
   const [images, setImages] = useState<ChatImage[]>([]);
   const [picking, setPicking] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(Boolean(openHistory));
+  useEffect(() => {
+    if (openHistory) router.setParams({ history: undefined });
+  }, [openHistory]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [voiceMode, setVoiceMode] = useState(false);
   const voiceRef = useRef(false);
@@ -157,6 +216,23 @@ export function ChatScreen({
       ? { headers: { Authorization: `Bearer ${token}` } }
       : {}),
   });
+  // Downloads the picture (signed in when it's ours) to a cache file, then adds it to the photo library.
+  const savePhoto = async (uri: string) => {
+    try {
+      const file = uri.startsWith("file:")
+        ? new File(uri)
+        : await File.downloadFileAsync(uri, new File(Paths.cache, `hypa-picture-${Date.now()}`), {
+            headers: imageSource(uri).headers,
+          });
+      // iOS Photos rejects a file without an image extension, so name it from its first bytes.
+      const type = pictureType(file);
+      if (!file.extension) file.move(new File(Paths.cache, `${file.name}.${type.ext}`));
+      await savePicture(file.uri, type.mime);
+      toast.showSuccess("Saved to Photos");
+    } catch (error) {
+      report(error);
+    }
+  };
   const report = useCallback(
     (error: unknown) =>
       toast.showError(
@@ -172,6 +248,17 @@ export function ChatScreen({
     audio.stop();
   }, [audio.stop]);
   const startListening = useRef<() => void>(() => {});
+  /** Opens a chat, or a new one, in place; a keyboard link's draft and camera are spent. */
+  const openChat = (chatId?: string) =>
+    router.setParams({
+      id: chatId,
+      customer: undefined,
+      new: chatId ? undefined : randomUUID(),
+      draft: undefined,
+      camera: undefined,
+      photos: undefined,
+      photo: undefined,
+    });
 
   useEffect(() => {
     session.current++;
@@ -334,27 +421,8 @@ export function ChatScreen({
           });
       if (result.canceled) return;
       const added: ChatImage[] = [];
-      for (const asset of result.assets.slice(0, 4 - images.length)) {
-        const context = ImageManipulator.manipulate(asset.uri);
-        context.resize(fitChatImage(asset.width, asset.height));
-        const rendered = await context.renderAsync();
-        try {
-          const image = await rendered.saveAsync({
-            format: SaveFormat.JPEG,
-            compress: 0.8,
-            base64: true,
-          });
-          if (!image.base64) throw new Error("Unable to prepare this photo.");
-          added.push({
-            uri: image.uri,
-            data: image.base64,
-            mime: "image/jpeg",
-          });
-        } finally {
-          rendered.release();
-          context.release();
-        }
-      }
+      for (const asset of result.assets.slice(0, 4 - images.length))
+        added.push(await toChatImage(asset.uri, asset.width, asset.height));
       if (owner !== session.current || !mounted.current) return;
       if (
         [...images, ...added].reduce(
@@ -373,6 +441,30 @@ export function ChatScreen({
       if (mounted.current) setPicking(false);
     }
   };
+  // After the reset effect above, so the photo isn't cleared as the chat opens. Each tap opens the
+  // camera once, so coming back to this screen, or an old one the app restores, doesn't reopen it.
+  useEffect(() => {
+    if (!openCamera || !claimCamera(openCamera)) return;
+    void pickImages(!fromPhotos);
+  }, [openCamera]);
+  useEffect(() => {
+    if (openPhoto) setPhoto(openPhoto);
+  }, [openPhoto]);
+
+  // Replaces the attached photos, so tapping a starter twice doesn't add the sample twice.
+  const attachStarterImage = async (module: number) => {
+    try {
+      const [asset] = await Asset.loadAsync(module);
+      const image = await toChatImage(
+        asset.localUri ?? asset.uri,
+        asset.width ?? 1600,
+        asset.height ?? 1600,
+      );
+      if (mounted.current) setImages([image]);
+    } catch (error) {
+      report(error);
+    }
+  };
 
   const updateChat = async (item: Conversation, remove: boolean) => {
     if (!remove && item.kind === "keyboard") return;
@@ -384,8 +476,7 @@ export function ChatScreen({
       });
       if (chat.chatId === item.id) {
         stopVoice();
-        chat.reset();
-        router.replace("/chat");
+        openChat();
       }
     } catch (error) {
       report(error);
@@ -517,19 +608,16 @@ export function ChatScreen({
             </Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            {id &&
-              iconButton(
-                "Back to Chat",
-                <ArrowLeft color={colors.icon} size={21} />,
-                () => router.back(),
-              )}
-            {token &&
-              iconButton(
-                "Chat history",
-                <History color={colors.icon} size={21} />,
-                () => setHistoryOpen(true),
-                locked,
-              )}
+            {token && (
+              <GlassIconButton
+                accessibilityLabel="Chat history"
+                fallbackClassName="bg-zinc-100 dark:bg-zinc-900"
+                disabled={locked}
+                onPress={() => setHistoryOpen(true)}
+              >
+                <History color={colors.icon} size={20} />
+              </GlassIconButton>
+            )}
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <GlassIconButton
@@ -540,12 +628,7 @@ export function ChatScreen({
                 stopVoice();
                 setDraft("");
                 setImages([]);
-                if (id)
-                  router.replace({
-                    pathname: "/chat",
-                    params: { new: randomUUID() },
-                  });
-                else chat.reset();
+                openChat();
               }}
             >
               <Plus color={colors.icon} size={22} />
@@ -685,8 +768,11 @@ export function ChatScreen({
               {!chat.loading &&
                 STARTERS.map((starter) => (
                   <Pressable
-                    key={starter}
-                    onPress={() => setDraft(starter)}
+                    key={starter.text}
+                    onPress={() => {
+                      setDraft(starter.text);
+                      if (starter.image) void attachStarterImage(starter.image);
+                    }}
                     style={{
                       padding: 16,
                       borderRadius: 18,
@@ -694,13 +780,18 @@ export function ChatScreen({
                       borderColor: colors.border,
                     }}
                   >
-                    <Text style={{ color: colors.text }}>{starter}</Text>
+                    <Text style={{ color: colors.text }}>{starter.text}</Text>
                   </Pressable>
                 ))}
             </View>
           }
           renderItem={({ item }) => {
             const mine = item.role === "user";
+            // Photos the user attached, then pictures the agent made.
+            const pictures = [
+              ...(item.images ?? []).map((image) => image.uri),
+              ...(item.imageUrls ?? []),
+            ];
             return (
               <Pressable
                 onLongPress={() => setMenu(item)}
@@ -758,7 +849,13 @@ export function ChatScreen({
                     }
                   />
                 )}
-                {item.images?.length ? (
+                {item.approval ? (
+                  <PaymentApprovalRow
+                    approval={item.approval}
+                    token={chat.connection.token}
+                  />
+                ) : null}
+                {pictures.length ? (
                   <View
                     style={{
                       flexDirection: "row",
@@ -767,25 +864,21 @@ export function ChatScreen({
                       justifyContent: mine ? "flex-end" : "flex-start",
                     }}
                   >
-                    {item.images.map((image) => (
+                    {pictures.map((uri) => (
                       <Pressable
-                        key={image.uri}
-                        accessibilityLabel="Open attached photo"
-                        onPress={() => setPhoto(image.uri)}
+                        key={uri}
+                        accessibilityLabel={
+                          mine ? "Open attached photo" : "Open picture"
+                        }
+                        onPress={() => setPhoto(uri)}
                       >
                         <Image
-                          source={imageSource(image.uri)}
+                          source={imageSource(uri)}
                           style={{ width: 120, height: 120, borderRadius: 14 }}
                         />
                       </Pressable>
                     ))}
                   </View>
-                ) : null}
-                {item.approval ? (
-                  <PaymentApprovalRow
-                    approval={item.approval}
-                    token={chat.connection.token}
-                  />
                 ) : null}
                 {mine ? (
                   item.content ? (
@@ -1323,10 +1416,25 @@ export function ChatScreen({
         onRequestClose={() => setPhoto(null)}
         animationType="slide"
       >
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-          {iconButton("Close photo", <X color={colors.icon} size={25} />, () =>
-            setPhoto(null),
-          )}
+        {/* Insets from the screen: SafeAreaView inside a Modal can start at zero on iOS and hide the button under the status bar. */}
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: colors.background,
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+          }}
+        >
+          <View
+            style={{ flexDirection: "row", justifyContent: "space-between", margin: 8 }}
+          >
+            {iconButton("Close photo", <X color={colors.icon} size={25} />, () =>
+              setPhoto(null),
+            )}
+            {iconButton("Save photo", <Download color={colors.icon} size={23} />, () =>
+              photo && void savePhoto(photo),
+            )}
+          </View>
           <ScrollView
             maximumZoomScale={4}
             centerContent
@@ -1340,7 +1448,7 @@ export function ChatScreen({
               />
             )}
           </ScrollView>
-        </SafeAreaView>
+        </View>
       </Modal>
       <Modal
         visible={historyOpen && Boolean(token)}
@@ -1385,6 +1493,14 @@ export function ChatScreen({
           <FlatList
             data={conversations}
             keyExtractor={(item) => item.id}
+            ListHeaderComponent={
+              <PinnedCustomers
+                onOpen={(threadId) => {
+                  setHistoryOpen(false);
+                  router.setParams({ customer: threadId });
+                }}
+              />
+            }
             onEndReached={() => {
               if (chats.hasNextPage && !chats.isFetchingNextPage)
                 void chats.fetchNextPage();
@@ -1415,10 +1531,7 @@ export function ChatScreen({
                 <Pressable
                   onPress={() => {
                     setHistoryOpen(false);
-                    router.push({
-                      pathname: "/chat/[id]",
-                      params: { id: item.id },
-                    });
+                    openChat(item.id);
                   }}
                   onLongPress={() =>
                     Alert.alert(item.title, "Delete this chat and its media?", [
@@ -1430,21 +1543,38 @@ export function ChatScreen({
                       },
                     ])
                   }
+                  accessibilityState={{ selected: item.id === chat.chatId }}
                   style={{
                     padding: 18,
                     borderBottomWidth: 1,
                     borderColor: colors.border,
-                    backgroundColor: colors.background,
+                    backgroundColor:
+                      item.id === chat.chatId
+                        ? colors.primary
+                        : colors.background,
                     flexDirection: "row",
                     gap: 10,
                   }}
                 >
                   {item.kind === "keyboard" && (
-                    <Keyboard color={colors.icon} size={19} />
+                    <Keyboard
+                      color={
+                        item.id === chat.chatId
+                          ? colors.primaryForeground
+                          : colors.icon
+                      }
+                      size={19}
+                    />
                   )}
                   <Text
                     numberOfLines={2}
-                    style={{ color: colors.text, flex: 1 }}
+                    style={{
+                      color:
+                        item.id === chat.chatId
+                          ? colors.primaryForeground
+                          : colors.text,
+                      flex: 1,
+                    }}
                   >
                     {item.kind === "keyboard"
                       ? "Keyboard · pinned"

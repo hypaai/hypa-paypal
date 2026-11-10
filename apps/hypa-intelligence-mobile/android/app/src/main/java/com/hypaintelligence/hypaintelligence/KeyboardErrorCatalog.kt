@@ -37,6 +37,7 @@ object KeyboardErrorCatalog {
   const val noVoice = "No voice"
   const val micNeeded = "Mic needed"
   const val recordingFailed = "Recording failed"
+  const val micBusy = "Mic busy or unavailable"
   const val noSpeech = "No speech"
   const val pinLimitReached = "5-pin limit reached"
   const val tryAgain = "Try again"

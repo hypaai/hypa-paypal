@@ -203,6 +203,8 @@ export const useSpeechRecorder = ({
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
+    // On unmount the native recorder can already be released, and reading a
+    // property of a freed shared object throws, so the read is guarded too.
     try {
       if (recorder.isRecording) await recorder.stop();
     } catch {}

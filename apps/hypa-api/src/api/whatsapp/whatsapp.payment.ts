@@ -4,6 +4,7 @@ import { receiptLabels } from '@hypa/intelligence-core/payment-receipt';
 import { DbService } from 'src/libs/db/db.service';
 import { decryptString } from 'src/utils/encryption.utils';
 import { HypaToolExecutor } from '../agent/tool-executor';
+import { PushService } from '../push/push.service';
 import { DeveloperSharedService } from '../developer/providers/shared.service';
 import { OrderEvents } from '../webhooks/order-events';
 import { sendTemplate, sendText } from './whatsapp.client';
@@ -11,7 +12,7 @@ import { withinServiceWindow } from './whatsapp.service';
 
 type Step = 'link_sent_at' | 'receipt_sent_at';
 type Loaded = Awaited<ReturnType<WhatsappPaymentService['load']>>;
-type Message = { text: string; template: { name: string; parameters: string[] } };
+type Message = { text: string; template: { name: string; parameters: string[] }; /** Told to the merchant once the customer's message is out. */ notice?: string };
 
 /**
  * The two messages a WhatsApp customer gets about an order: the payment link once the merchant approves it, and the receipt once PayPal says it is paid.
@@ -25,6 +26,7 @@ export class WhatsappPaymentService implements OnModuleInit {
     private readonly db: DbService,
     private readonly tools: HypaToolExecutor,
     private readonly billing: DeveloperSharedService,
+    private readonly push: PushService,
     private readonly events: OrderEvents,
   ) {}
 
@@ -61,12 +63,13 @@ export class WhatsappPaymentService implements OnModuleInit {
   }
 
   async sendReceipt(orderId: string): Promise<void> {
-    await this.once(orderId, 'receipt_sent_at', async ({ order }) => {
+    await this.once(orderId, 'receipt_sent_at', async ({ order, link }) => {
       if (order.status !== 'paid') return null;
       const amount = this.amount(order);
       return {
         text: `${receiptLabels(order.customer.language).successTitle}: ${amount}`,
         template: { name: process.env.WHATSAPP_PAYMENT_RECEIPT_TEMPLATE?.trim() || 'payment_received', parameters: [amount] },
+        notice: `${link.thread.customer_name ?? 'Your customer'} has paid ${amount}`,
       };
     });
   }
@@ -75,13 +78,13 @@ export class WhatsappPaymentService implements OnModuleInit {
   private async once(
     orderId: string,
     step: Step,
-    build: (context: Pick<Loaded, 'order' | 'number'>) => Promise<Message | null>,
+    build: (context: Pick<Loaded, 'order' | 'number' | 'link'>) => Promise<Message | null>,
   ) {
     const claimed = await this.db.whatsapp_order.updateMany({ where: { order_id: orderId, [step]: null }, data: { [step]: new Date() } });
     if (!claimed.count) return;
     try {
       const { link, order, number } = await this.load(orderId);
-      const message = await build({ order, number });
+      const message = await build({ order, number, link });
       if (!message) {
         await this.db.whatsapp_order.update({ where: { order_id: orderId }, data: { [step]: null } });
         return;
@@ -93,6 +96,7 @@ export class WhatsappPaymentService implements OnModuleInit {
         await sendTemplate(number.phone_number_id, to, { ...message.template, language: this.templateLanguage(order.customer.language) });
       }
       await this.db.whatsapp_draft.create({ data: { threadId: link.threadId, text: message.text, status: 'sent', sent_at: new Date() } });
+      if (message.notice) await this.push.notify(number.userId, { title: 'Payment received', body: message.notice, data: { threadId: link.threadId } });
     } catch (error) {
       await this.db.whatsapp_order.update({ where: { order_id: orderId }, data: { [step]: null } }).catch(() => undefined);
       this.logger.warn(`A WhatsApp ${step === 'link_sent_at' ? 'payment link' : 'receipt'} was not sent: ${(error as Error).message}`);

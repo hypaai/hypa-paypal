@@ -23,6 +23,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.UserDictionary
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -71,6 +72,8 @@ import com.hypaintelligence.hypaintelligence.correction.CorrectionAction
 import com.hypaintelligence.hypaintelligence.correction.CorrectionDecision
 import com.hypaintelligence.hypaintelligence.concurrent.KeyboardThreads
 import com.hypaintelligence.hypaintelligence.correction.CorrectionLedger
+import com.hypaintelligence.hypaintelligence.correction.TapDecoder
+import com.hypaintelligence.hypaintelligence.correction.TapFit
 import com.hypaintelligence.hypaintelligence.correction.WordDiff
 import com.hypaintelligence.hypaintelligence.debug.TypingJankMonitor
 import com.hypaintelligence.hypaintelligence.emoji.GraphemeText
@@ -94,6 +97,7 @@ import com.hypaintelligence.hypaintelligence.input.KeyboardTextEngine
 import com.hypaintelligence.hypaintelligence.input.KeyboardTypingEngine
 import com.hypaintelligence.hypaintelligence.input.ShiftState
 import com.hypaintelligence.hypaintelligence.input.keyCodeOf
+import com.hypaintelligence.hypaintelligence.input.AutoCapMode
 import com.hypaintelligence.hypaintelligence.input.twoInitialCapsFix
 import com.hypaintelligence.hypaintelligence.neural.DeviceCapability
 import com.hypaintelligence.hypaintelligence.neural.TinyKeysService
@@ -134,6 +138,7 @@ private enum class ToolbarErrorSlot {
   DICTIONARY,
   STT,
   TTS,
+  ASK,
 }
 
 private enum class FeatureMode {
@@ -184,6 +189,7 @@ internal enum class KeyboardTool {
   TEXT_EDITING,
   LANGUAGES,
   EMOJI,
+  LENS,
   SETTINGS,
 }
 
@@ -231,6 +237,7 @@ class HypaKeyboardPanelView(
     private const val TAP_SPREAD = 0.5f
     private const val TAP_PRIOR_WEIGHT = 0.8f
     private const val TAP_BAR_SHARE = 0.5f
+    private const val TAP_TRAIL_MAX = 32
     private const val TOOLBAR_HEIGHT_DP = 48
     private const val TOOLBAR_TOOL_COUNT = 4
     private const val TOOL_TILE_DP = 48
@@ -245,6 +252,16 @@ class HypaKeyboardPanelView(
     private const val MAX_BLOCK_LOOKBACK_CHARS = 600
 
     private const val DOUBLE_SPACE_PERIOD_MS = 400L
+    private const val DELETE_LETTERS_TICKS = 20
+    private const val DELETE_WORD_EVERY_TICKS = 4
+    private val SPACE_SWAP_PUNCTUATION = setOf(".", ",", "?", "!", ":", ";")
+
+    /** The spaces before the cursor plus the word before them: what one word-delete removes. */
+    fun trailingWordLength(text: CharSequence): Int {
+      val spaces = text.takeLastWhile { it == ' ' }.length
+      val word = text.dropLast(spaces).takeLastWhile { !it.isWhitespace() }.length
+      return spaces + word
+    }
     private const val SELECT_MULTI_TAP_MS = 450L
 
     private const val IDLE_BLOCK_CORRECTION_MS = 1000L
@@ -254,6 +271,9 @@ class HypaKeyboardPanelView(
     private const val BOARD_SWAP_FADE_MS = 120L
 
     private const val TOOLBAR_ERROR_MS = 3500L
+
+    /** Ask's message stands in for its whole bar, so it is short, and a tap clears it. */
+    private const val ASK_ERROR_MS = 2000L
     private const val TOOLBAR_ERROR_COLOR = "#EF4444"
 
     private const val EMOJI_GRID_COLUMNS = 8
@@ -262,7 +282,6 @@ class HypaKeyboardPanelView(
     private const val EMOJI_VARIANT_COLUMNS = 6 
 
     private const val ASK_CONTEXT_LIMIT = 5000
-    private const val ASK_PREFS = "hypa_ask"
     private val ASK_TOOL_LABELS = mapOf(
       "translate_message" to ("Translating" to "Translated"),
       "text_to_speech" to ("Preparing audio" to "Read aloud"),
@@ -270,6 +289,9 @@ class HypaKeyboardPanelView(
       "look_up_term" to ("Looking up the word" to "Looked up"),
       "extract_text_from_image" to ("Reading the image" to "Read image"),
       "translate_and_speak" to ("Translating and speaking" to "Translated and spoke"),
+      "current_time" to ("Checking the time" to "Checked the time"),
+      "weather" to ("Checking the weather" to "Checked the weather"),
+      "web_search" to ("Searching the web" to "Searched the web"),
     )
   }
 
@@ -520,9 +542,11 @@ class HypaKeyboardPanelView(
   private var boardRootView: LinearLayout? = null
   private val boardKeyViews = HashSet<View>()
   private val boardLetters = HashMap<View, String>()
+  private var boardSpace: View? = null
   private var letterPriorKey: String? = null
   private var letterPrior: Map<String, Float> = emptyMap()
   private val tapRedirects = HashMap<View, View>()
+  private val tapTrail = ArrayList<TapFit>()
   private var showHitSlopOverlay = false
   private val touchLocationBuffer = IntArray(2)
   private var keyPreview: KeyPreviewDrawable? = null
@@ -655,8 +679,14 @@ class HypaKeyboardPanelView(
           val tool = KeyboardTool.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
           if (tool != null && tool !in this) add(tool)
         }
-      }
-    return stored + KeyboardTool.entries.filter { it !in stored }
+      }.toMutableList()
+    val missing = KeyboardTool.entries.filter { it !in stored }.toMutableList()
+    val settingsAt = stored.indexOf(KeyboardTool.SETTINGS)
+    if (KeyboardTool.LENS in missing && settingsAt >= 0) {
+      stored.add(settingsAt, KeyboardTool.LENS)
+      missing.remove(KeyboardTool.LENS)
+    }
+    return stored + missing
   }
 
   private fun persistToolOrder() {
@@ -721,6 +751,7 @@ class HypaKeyboardPanelView(
     loadFont()
     prepareKeySound()
     registerPrefs()
+    loadUserDictionary()
     rebuild()
   }
 
@@ -751,6 +782,20 @@ class HypaKeyboardPanelView(
     flushUsageStats()
     jankMonitor.cancel()
     mainHandler.removeCallbacksAndMessages(null)
+  }
+
+  /**
+   * The text typed in Ask, to bring back after the keyboard restarts (screen off, rotation).
+   * Null when Ask is not open, or already shows a reply.
+   */
+  fun askDraft(): String? =
+    if (featureMode == FeatureMode.ASK && askTurn == null) askInput else null
+
+  fun restoreAskDraft(draft: String) {
+    featureMode = FeatureMode.ASK
+    askInput = draft
+    askFocused = true
+    refreshAsk()
   }
 
   fun resetSessionState(preserveActiveMode: Boolean = false) {
@@ -820,6 +865,7 @@ class HypaKeyboardPanelView(
   }
 
   fun bindEditorInfo(info: EditorInfo?) {
+    editorInfo = info
     recentAlternateUnit = null
     contextEngine.bindEditorInfo(info)
     textEngine.bindEditorInfo(info)
@@ -861,6 +907,11 @@ class HypaKeyboardPanelView(
 
   fun bindSelection(selectionStart: Int, selectionEnd: Int) {
     if (contextEngine.onSelectionChanged(selectionStart, selectionEnd)) {
+      // A tap in the app's text box sends typing there; tapping the Ask box brings it back.
+      if (askCapturesKeys) {
+        askFocused = false
+        refreshAsk()
+      }
       recentAlternateUnit = null
       dismissVariantPopup()
       publishPredictionContext()
@@ -973,7 +1024,8 @@ class HypaKeyboardPanelView(
   private fun textEditingClipboardText(): CharSequence? {
     val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
     val clip = manager?.primaryClip ?: return null
-    return clip.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)
+    // A copied picture is only a URI; never paste that as text.
+    return clip.takeIf { it.itemCount > 0 }?.getItemAt(0)?.takeIf { it.text != null || it.uri == null }?.coerceToText(context)
   }
 
   internal fun textEditingSelectMode(): Boolean = isTextEditingSelectMode
@@ -1494,6 +1546,7 @@ class HypaKeyboardPanelView(
     countsCompletedWord: Boolean = false,
   ) {
     recentAlternateUnit = null
+    predictionAddedSpace = false
     val text = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFC)
     if (!textEngine.commitText(text)) return
     logHostEcho("commit '$text' viaKeyEvent=${textEngine.fieldTakesKeyEvents && keyCodeOf(text) != null}")
@@ -1546,6 +1599,8 @@ class HypaKeyboardPanelView(
   }
 
   private fun deleteOneCharacterTracked() {
+    tapTrail.clear()
+    predictionAddedSpace = false
     val unit = recentAlternateUnit
     recentAlternateUnit = null
     val input = inputSupplier()
@@ -1616,7 +1671,39 @@ class HypaKeyboardPanelView(
     return sentenceWords.getOrNull(sentenceWords.size - 2).orEmpty()
   }
 
+  /**
+   * Words in the user dictionary are never corrected, and its shortcuts ("omw" → "On my way!") are
+   * typed out when the word ends. Android only lets the active keyboard read it, so a failure is skipped.
+   */
+  private fun loadUserDictionary() {
+    KeyboardThreads.io("hypa-user-dictionary").newThread {
+      val words = ArrayList<String>()
+      val shortcuts = HashMap<String, String>()
+      runCatching {
+        context.contentResolver.query(
+          UserDictionary.Words.CONTENT_URI,
+          arrayOf(UserDictionary.Words.WORD, UserDictionary.Words.SHORTCUT),
+          null, null, null,
+        )?.use { rows ->
+          while (rows.moveToNext()) {
+            val word = rows.getString(0)?.trim().orEmpty()
+            if (word.isEmpty()) continue
+            words += word
+            rows.getString(1)?.trim()?.takeIf { it.isNotEmpty() }?.let {
+              shortcuts[it.lowercase()] = word
+              words += it
+            }
+          }
+        }
+      }
+      personalVocabulary.setDeviceWords(words)
+      textShortcuts = shortcuts
+    }.start()
+  }
+
   private fun maybeAutocorrectCompletedWord() {
+    val taps = tapTrail.toList()
+    tapTrail.clear()
     val snapshot = contextEngine.snapshot()
     if (!snapshot.mode.allowsPrediction) {
       learnCompletedWord()
@@ -1624,10 +1711,18 @@ class HypaKeyboardPanelView(
     }
     val word = snapshot.previousWord
     if (word.isEmpty()) return
+    textShortcuts[word.lowercase()]?.let { expansion ->
+      if (textEngine.replaceRecentCommittedText("$word ", "$expansion ")) {
+        correctionLedger.recordWordCorrection(original = word, replacement = expansion)
+        contextEngine.resync()
+        publishPredictionContext()
+        return
+      }
+    }
 
     val decision =
       if (autocorrectEnabled && !correctionLedger.isRejected(word)) {
-        autocorrectEngine.evaluate(word, wordBefore(snapshot))
+        autocorrectEngine.evaluate(word, wordBefore(snapshot), taps)
       } else {
         CorrectionDecision.keep(word)
       }
@@ -2178,6 +2273,7 @@ class HypaKeyboardPanelView(
         ToolbarErrorSlot.DICTIONARY -> FeatureMode.DICTIONARY
         ToolbarErrorSlot.TTS -> FeatureMode.TTS
         ToolbarErrorSlot.STT -> FeatureMode.STT
+        ToolbarErrorSlot.ASK -> FeatureMode.ASK
       }
     closePickerSearch(headerMode)
   }
@@ -2192,7 +2288,7 @@ class HypaKeyboardPanelView(
         rebuild()
       },
       slot,
-      SystemClock.uptimeMillis() + TOOLBAR_ERROR_MS,
+      SystemClock.uptimeMillis() + if (slot == ToolbarErrorSlot.ASK) ASK_ERROR_MS else TOOLBAR_ERROR_MS,
     )
     if (closeSearch) {
       closePickerSearchForError(slot)
@@ -2696,6 +2792,7 @@ class HypaKeyboardPanelView(
     letterKeyViews.clear()
     boardKeyViews.clear()
     boardLetters.clear()
+    boardSpace = null
     tapRedirects.clear()
     boardRootView = null
     shiftKeyView = null
@@ -2953,7 +3050,6 @@ class HypaKeyboardPanelView(
     val requestId: String = java.util.UUID.randomUUID().toString(),
     var request: String = "",
     var activity: String = "Working…",
-    var fromCamera: Boolean = false,
   ) {
     var payload: JSONObject? = null
     var sentSelection: String? = null
@@ -2964,6 +3060,9 @@ class HypaKeyboardPanelView(
     var suggestions: List<String> = emptyList()
     var speak = false
     var audioUrl: String? = null
+    /** The latest picture Hypa made, downloaded to the cache so it can be copied or inserted. */
+    var picture: java.io.File? = null
+    var pictureMime = "image/png"
     var chatId: String? = null
     var outcome: AskOutcome? = null
     var error: String? = null
@@ -2974,7 +3073,13 @@ class HypaKeyboardPanelView(
   }
 
   private val askService = AskService()
+  private var editorInfo: EditorInfo? = null
   private var askInput = ""
+  private var askFocused = true
+  /** Long-press on the Ask box shows Paste and Copy in its place. */
+  private var askEditMenu = false
+  /** The camera button swaps the input box for Camera and Photos pills; tapping it again brings the box back. */
+  private var askPhotoMenu = false
   private var askTurn: AskTurn? = null
   @Volatile private var askGeneration = 0
   private var askRevision = 0
@@ -2982,7 +3087,6 @@ class HypaKeyboardPanelView(
   private var askCopied = false
   /** Earlier turns of this Ask session, sent so Hypa can follow up on its own question. */
   private val askHistory = mutableListOf<Pair<String, String>>()
-  private var askReplySuggestions: List<String> = emptyList()
   /** "requestId:outcome" whose status line ("Inserted", "Original restored"…) has timed out. */
   private var askStatusFadedKey: String? = null
   private var askStatusTimerKey: String? = null
@@ -3004,8 +3108,15 @@ class HypaKeyboardPanelView(
     }
 
   private val isAskRecording: Boolean get() = askRecorder != null
+  /** Ask's last autocorrection (typed to replacement), undone if backspace is the very next key. */
+  private var askCorrection: Pair<String, String>? = null
+  private var askLastSpaceMs = 0L
+  /** A picked suggestion just added a space after the word. */
+  private var predictionAddedSpace = false
+  @Volatile private var textShortcuts: Map<String, String> = emptyMap()
+
   private val askCapturesKeys: Boolean
-    get() = featureMode == FeatureMode.ASK && !askShowsDetails && askTurn == null && !isAskRecording
+    get() = featureMode == FeatureMode.ASK && askFocused && !askShowsDetails && askTurn == null && !isAskRecording
   private val capturesTyping: Boolean get() = pickerSearchActive || askCapturesKeys
   private val askCanUndo: Boolean
     get() = lastTranslationState != null &&
@@ -3044,10 +3155,12 @@ class HypaKeyboardPanelView(
     if (askTurn?.speak == true) stopTts()
     askTurn = null
     askInput = ""
+    askFocused = true
+    askEditMenu = false
+    askPhotoMenu = false
     askShowsDetails = false
     askCopied = false
     askHistory.clear()
-    askReplySuggestions = emptyList()
   }
 
   private fun startNewAsk() {
@@ -3056,14 +3169,111 @@ class HypaKeyboardPanelView(
   }
 
   private fun appendAskInput(value: String) {
-    askInput += value
+    askCorrection = null
+    if (value == " ") finishAskSpace() else askInput += value
+    askEditMenu = false
+    askPhotoMenu = false
     refreshAsk()
+    refreshAutoCaps()
+  }
+
+  /** A space in Ask: a quick second space after a word becomes ". ", otherwise the word just finished is corrected. */
+  private fun finishAskSpace() {
+    val now = SystemClock.uptimeMillis()
+    val doubleTap = now - askLastSpaceMs <= DOUBLE_SPACE_PERIOD_MS
+    askLastSpaceMs = now
+    val preceding = askInput.dropLast(1).lastOrNull()
+    if (doubleTap && askInput.endsWith(" ") && preceding != null && preceding.isLetterOrDigit()) {
+      askInput = askInput.dropLast(1) + ". "
+      askLastSpaceMs = 0L
+      return
+    }
+    askInput += " "
+    correctAskWord()
   }
 
   private fun deleteAskCharacter() {
     if (askInput.isEmpty()) return
-    askInput = askInput.dropLast(1)
+    tapTrail.clear()
+    // Backspace right after a correction brings back what was typed, and that word is left alone after.
+    val undo = askCorrection
+    askInput =
+      if (undo != null && askInput.endsWith("${undo.second} ")) {
+        correctionLedger.reject(undo.first)
+        askInput.dropLast(undo.second.length + 1) + undo.first
+      } else {
+        askInput.dropLast(1)
+      }
+    askCorrection = null
+    askLastSpaceMs = 0L
+    askEditMenu = false
+    askPhotoMenu = false
     refreshAsk()
+    refreshAutoCaps()
+  }
+
+  /**
+   * Ask's box is the keyboard's own text, so it gets the same word-end help as the host field:
+   * the two-capitals fix, autocorrect (with the on-device model as a backup) and learning the word.
+   */
+  private fun correctAskWord() {
+    val taps = tapTrail.toList()
+    tapTrail.clear()
+    val before = askInput.dropLast(1)
+    val typed = before.takeLastWhile { it.isLetter() || it == '\'' }
+    if (typed.isEmpty()) return
+    val base = before.dropLast(typed.length)
+    val word = twoInitialCapsFix(typed, layoutEngine.caseLocale(keyboardLanguageCode)) ?: typed
+    textShortcuts[word.lowercase()]?.let { expansion ->
+      askInput = "$base$expansion "
+      askCorrection = word to expansion
+      return
+    }
+    askInput = "$base$word "
+    val previousWord = base.trimEnd().takeLastWhile { it.isLetter() || it == '\'' }
+    val decision =
+      if (autocorrectEnabled && !correctionLedger.isRejected(word)) {
+        autocorrectEngine.evaluate(word, previousWord, taps)
+      } else {
+        CorrectionDecision.keep(word)
+      }
+    val replacement =
+      decision.replacement.takeIf { decision.action == CorrectionAction.AUTO_CORRECT } ?: modelWordCorrection(word)
+    if (replacement == null || replacement == word) {
+      personalVocabulary.record(previousWord = previousWord, word = word)
+      return
+    }
+    askInput = "$base$replacement "
+    askCorrection = word to replacement
+  }
+
+
+  private fun askEditActions(): List<Pair<String, () -> Unit>> =
+    listOfNotNull(
+      textEditingClipboardText()?.takeIf { it.isNotEmpty() }?.let { clip ->
+        "Paste" to {
+          askInput += clip
+          askFocused = true
+          askEditMenu = false
+          askPhotoMenu = false
+          refreshAsk()
+        }
+      },
+      ((if (askCopied) "Copied" else "Copy") to { copyAskInput() }).takeIf { askInput.isNotEmpty() },
+    )
+
+  private fun copyAskInput() {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+    clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Hypa", askInput))
+    askCopied = true
+    refreshAsk()
+    mainHandler.postDelayed({
+      if (!askCopied) return@postDelayed
+      askCopied = false
+      askEditMenu = false
+      askPhotoMenu = false
+      refreshAsk()
+    }, 1500L)
   }
 
   private fun currentAskDocument(input: InputConnection?): String =
@@ -3081,7 +3291,6 @@ class HypaKeyboardPanelView(
     val generation = askGeneration
     val turn = AskTurn(request = instruction, activity = "Working…")
     askTurn = turn
-    askReplySuggestions = emptyList()
     askShowsDetails = false
 
     val input = inputSupplier()
@@ -3110,6 +3319,7 @@ class HypaKeyboardPanelView(
         .put("model", assistantModel)
         .put("surface", "keyboard")
         .put("language", ttsLanguageName())
+        .put("timeZone", java.util.TimeZone.getDefault().id)
     if (context.length() > 0) payload.put("context", context)
     // Signed in, the server keeps the thread; it rejects client history then.
     if (askHistory.isNotEmpty() && apiToken.isBlank()) {
@@ -3153,9 +3363,11 @@ class HypaKeyboardPanelView(
 
   private fun replyToAsk() {
     stopTts()
-    askReplySuggestions = askTurn?.suggestions.orEmpty()
     askTurn = null
     askInput = ""
+    askFocused = true
+    askEditMenu = false
+    askPhotoMenu = false
     askShowsDetails = false
     askCopied = false
     refreshAsk()
@@ -3206,6 +3418,7 @@ class HypaKeyboardPanelView(
         step.ok = event.optBoolean("ok", false)
       }
       "audio" -> event.text("url")?.let { turn.audioUrl = it }
+      "image" -> event.text("url")?.let { downloadAskPicture(turn, it, event.text("mime") ?: "image/png", generation) }
       "approval" -> turn.approval = event
       "done" -> {
         turn.text = event.text("text").orEmpty()
@@ -3216,6 +3429,13 @@ class HypaKeyboardPanelView(
             (0 until list.length()).map { list.optString(it).trim() }.filter { it.isNotEmpty() }
           }.orEmpty()
         event.text("audioUrl")?.let { turn.audioUrl = it }
+        val provider = event.text("provider")
+        val model = event.text("model")
+        if (provider != null && model != null && (provider != assistantProvider || model != assistantModel)) {
+          assistantProvider = provider
+          assistantModel = model
+          HypaKeyboardStore.setAssistantModel(context, provider, model)
+        }
         if (turn.request.isNotEmpty() && turn.text.isNotEmpty()) {
           askHistory += "user" to turn.request
           askHistory += "assistant" to turn.text
@@ -3300,7 +3520,7 @@ class HypaKeyboardPanelView(
 
   private fun recoverAsk(generation: Int) {
     val turn = askTurn ?: return
-    if (!turn.fromCamera) turn.activity = "Reconnecting…"
+    turn.activity = "Reconnecting…"
     refreshAsk()
     val token = apiToken.trim()
     val requestId = turn.requestId
@@ -3318,10 +3538,6 @@ class HypaKeyboardPanelView(
         val current = askTurn ?: return@post
         val (code, body) = result
         when {
-          code == 404 && current.fromCamera -> {
-            current.retryable = false
-            failAsk(generation, "No photo sent", null)
-          }
           code == 200 && body?.optString("status") == "done" -> {
             body.optJSONObject("approval")?.let { current.approval = it }
             current.text = body.text("message").orEmpty()
@@ -3395,6 +3611,92 @@ class HypaKeyboardPanelView(
     clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Hypa", text))
     askCopied = true
     refreshAsk()
+  }
+
+  private fun downloadAskPicture(turn: AskTurn, url: String, mime: String, generation: Int) {
+    val token = apiToken.trim()
+    Thread {
+      val bytes = runCatching { askService.download(token, url) }.getOrNull()
+      // ponytail: one cache file per picture, left for the system to clear; the clipboard may still point at older ones.
+      val file =
+        bytes?.takeIf { it.isNotEmpty() }?.let { data ->
+          val ext = when (mime) { "image/jpeg" -> "jpg"; "image/webp" -> "webp"; else -> "png" }
+          runCatching { java.io.File(context.cacheDir, "hypa_picture_${turn.requestId}.$ext").apply { writeBytes(data) } }.getOrNull()
+        }
+      mainHandler.post {
+        if (generation != askGeneration || askTurn !== turn || file == null) return@post
+        turn.picture = file
+        turn.pictureMime = mime
+        refreshAsk()
+      }
+    }.also { it.isDaemon = true }.start()
+  }
+
+  private fun askPictureUri(file: java.io.File): android.net.Uri =
+    androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+
+  /** True when the app being typed in accepts pasted pictures through the keyboard. */
+  private fun editorTakesPicture(mime: String): Boolean =
+    editorInfo?.let { info ->
+      androidx.core.view.inputmethod.EditorInfoCompat.getContentMimeTypes(info)
+        .any { android.content.ClipDescription.compareMimeTypes(mime, it) }
+    } == true
+
+  private fun insertAskPicture() {
+    val turn = askTurn ?: return
+    val file = turn.picture ?: return
+    val input = inputSupplier() ?: return
+    val info = editorInfo ?: return
+    val content =
+      androidx.core.view.inputmethod.InputContentInfoCompat(
+        askPictureUri(file),
+        android.content.ClipDescription("Hypa picture", arrayOf(turn.pictureMime)),
+        null,
+      )
+    val inserted =
+      androidx.core.view.inputmethod.InputConnectionCompat.commitContent(
+        input,
+        info,
+        content,
+        androidx.core.view.inputmethod.InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION,
+        null,
+      )
+    if (!inserted) copyAskPicture()
+  }
+
+  private fun copyAskPicture() {
+    val file = askTurn?.picture ?: return
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+    runCatching {
+      clipboard?.setPrimaryClip(android.content.ClipData.newUri(context.contentResolver, "Hypa picture", askPictureUri(file)))
+      askCopied = true
+    }.onFailure { Log.w(TAG, "Ask picture copy failed", it) }
+    refreshAsk()
+  }
+
+  private fun askPictureActions(turn: AskTurn, label: Int): List<View> =
+    listOfNotNull(
+      askAction("Insert", label) { insertAskPicture() }.takeIf { editorTakesPicture(turn.pictureMime) },
+      askAction(if (askCopied) "Copied" else "Copy", label) { copyAskPicture() },
+      askAction("Save", label) { saveAskPicture() },
+    )
+
+  private fun saveAskPicture() {
+    val turn = askTurn ?: return
+    val file = turn.picture ?: return
+    Thread {
+      val saved =
+        runCatching { expo.modules.hypakeyboardstorage.HypaPictureSaver.save(context, file, turn.pictureMime) }
+          .onFailure { Log.w(TAG, "Ask picture save failed", it) }
+          .isSuccess
+      mainHandler.post {
+        android.widget.Toast.makeText(
+          context,
+          if (saved) "Saved to Photos" else "Couldn't save the picture",
+          android.widget.Toast.LENGTH_SHORT,
+        ).show()
+      }
+    }.also { it.isDaemon = true }.start()
   }
 
   private fun approvalSummary(approval: JSONObject): String =
@@ -3472,6 +3774,8 @@ class HypaKeyboardPanelView(
       }.onFailure { Log.w(TAG, "Ask recording failed", it) }.getOrNull()
     if (recorder == null) {
       runCatching { file.delete() }
+      // The mic would not start, for example during a call: say so instead of doing nothing.
+      showToolbarError(ToolbarErrorSlot.ASK, KeyboardErrorCatalog.micBusy)
       return
     }
     askRecorder = recorder
@@ -3505,41 +3809,24 @@ class HypaKeyboardPanelView(
     return "%d:%02d".format(seconds / 60, seconds % 60)
   }
 
-  /** Android keyboards can't take photos, so the Hypa app does and runs the request under this id. */
-  private fun openAskCamera() {
-    val requestId = java.util.UUID.randomUUID().toString()
-    context.getSharedPreferences(ASK_PREFS, Context.MODE_PRIVATE).edit()
-      .putString("cameraId", requestId)
-      .putLong("cameraAt", System.currentTimeMillis())
-      .apply()
+  /** Keyboards can't use the camera, so this opens the pinned Keyboard chat in the Hypa app with
+   * its camera. The photo and the Ask text land in that chat's input box. */
+  private fun openAskCamera(photos: Boolean = false) {
+    askPhotoMenu = false
+    refreshAsk()
+    // A reply already named the Keyboard chat (as "Open in Hypa" uses); otherwise the app looks it up.
     val uri =
-      android.net.Uri.Builder()
-        .scheme("hypaintelligence")
-        .authority("ask-camera")
-        .appendQueryParameter("requestId", requestId)
-        .appendQueryParameter("input", askInput)
-        .appendQueryParameter("language", ttsLanguageName())
-        .appendQueryParameter("provider", assistantProvider)
-        .appendQueryParameter("model", assistantModel)
+      android.net.Uri.parse(askTurn?.chatId?.let { "hypaintelligence://chat/$it" } ?: "hypaintelligence://keyboard-chat")
+        .buildUpon()
+        .appendQueryParameter("camera", System.currentTimeMillis().toString())
+        .apply { if (photos) appendQueryParameter("photos", "1") }
+        .apply { if (askInput.isNotEmpty()) appendQueryParameter("draft", askInput) }
         .build()
     startHostApp(
       android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
         .setPackage(context.packageName)
         .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
     )
-  }
-
-  /** Called when the keyboard opens in another app: picks up a photo request sent from the Hypa app. */
-  fun resumeAskCamera() {
-    val prefs = context.getSharedPreferences(ASK_PREFS, Context.MODE_PRIVATE)
-    val requestId = prefs.getString("cameraId", null) ?: return
-    val startedAt = prefs.getLong("cameraAt", 0L)
-    prefs.edit().remove("cameraId").remove("cameraAt").apply()
-    if (System.currentTimeMillis() - startedAt > 30 * 60_000L) return
-    resetAsk()
-    featureMode = FeatureMode.ASK
-    askTurn = AskTurn(requestId = requestId, request = "Photo", activity = "Reading your photo…", fromCamera = true)
-    recoverAsk(askGeneration)
   }
 
   private fun askTextSize(): Float = (fontSize - 2f).coerceAtLeast(11f)
@@ -3599,17 +3886,17 @@ class HypaKeyboardPanelView(
       refreshAsk()
     }
 
-  private fun askSuggestionStrip(suggestions: List<String>, bg: Int, fg: Int): HorizontalScrollView =
+  private fun askPillStrip(pills: List<Pair<String, () -> Unit>>, bg: Int, fg: Int): HorizontalScrollView =
     HorizontalScrollView(context).apply {
       isHorizontalScrollBarEnabled = false
       addView(
         LinearLayout(context).apply {
           orientation = HORIZONTAL
           gravity = Gravity.CENTER_VERTICAL
-          suggestions.forEach { suggestion ->
+          pills.forEach { (title, action) ->
             addView(
               TextView(context).apply {
-                text = suggestion
+                text = title
                 setTextColor(fg)
                 textSize = askTextSize()
                 typeface = keyTypeface
@@ -3618,7 +3905,7 @@ class HypaKeyboardPanelView(
                 background = roundedBg(bg, 999f)
                 setPadding(dp(12), dp(5), dp(12), dp(5))
                 layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(6) }
-                setOnTouchListener(TapTouch(allowParentScroll = true) { sendAskSuggestion(suggestion) })
+                setOnTouchListener(TapTouch(allowParentScroll = true) { action() })
               },
             )
           }
@@ -3652,6 +3939,11 @@ class HypaKeyboardPanelView(
       return row
     }
 
+    toolbarErrors[ToolbarErrorSlot.ASK]?.let { error ->
+      row.addView(inlineToolbarErrorLabel(error) { dismissToolbarError(ToolbarErrorSlot.ASK) })
+      return row
+    }
+
     if (isAskRecording) {
       row.addView(askCircle(R.drawable.ic_ask_camera, "Take photo", keyBg, label) { openAskCamera() }.apply { alpha = 0.4f })
       row.addView(
@@ -3680,15 +3972,42 @@ class HypaKeyboardPanelView(
     }
 
     if (turn == null) {
-      row.addView(askCircle(R.drawable.ic_ask_camera, "Take photo", keyBg, label) { openAskCamera() })
+      row.addView(
+        askCircle(R.drawable.ic_ask_camera, if (askPhotoMenu) "Close photo options" else "Add a photo", keyBg, label) {
+          askEditMenu = false
+          askPhotoMenu = !askPhotoMenu
+          refreshAsk()
+        },
+      )
       val field =
         FrameLayout(context).apply {
           background = roundedBg(keyBg, 999f)
           layoutParams = LayoutParams(0, dp(30), 1f).apply { marginEnd = dp(6) }
+          setOnTouchListener(
+            TapTouch(
+              onLongPress = {
+                if (askEditActions().isNotEmpty()) {
+                  askEditMenu = true
+                  refreshAsk()
+                }
+              },
+            ) {
+              if (!askFocused) {
+                askFocused = true
+                refreshAsk()
+              }
+            },
+          )
         }
-      if (askInput.isEmpty() && askReplySuggestions.isNotEmpty()) {
+      val pills =
+        when {
+          askPhotoMenu -> listOf("Camera" to { openAskCamera() }, "Photos" to { openAskCamera(photos = true) })
+          askEditMenu -> askEditActions()
+          else -> emptyList()
+        }
+      if (pills.isNotEmpty()) {
         field.background = null
-        field.addView(askSuggestionStrip(askReplySuggestions, keyBg, label))
+        field.addView(askPillStrip(pills, keyBg, label))
       } else {
         field.addView(
           LinearLayout(context).apply {
@@ -3711,12 +4030,12 @@ class HypaKeyboardPanelView(
                 }
               }
             if (askInput.isEmpty()) {
-              addView(blinkingCaret(label))
+              if (askFocused) addView(blinkingCaret(label))
               addView(text)
             } else {
               // Shrinks to fit so the caret stays right after the text.
               addView(text, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, 1f))
-              addView(blinkingCaret(label))
+              if (askFocused) addView(blinkingCaret(label))
             }
           },
           FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.MATCH_PARENT),
@@ -3775,6 +4094,8 @@ class HypaKeyboardPanelView(
     val firstLine = turn.text.lineSequence().firstOrNull().orEmpty()
     val (lead, title, actions) =
       when {
+        turn.picture != null && !isTtsLoading && !isTtsPlaying ->
+          Triple(null, firstLine.ifEmpty { "Picture ready" }, askPictureActions(turn, label) + undo)
         turn.speak && isTtsLoading -> Triple(askSpinner(label), "Preparing audio…", undo)
         turn.speak && isTtsPlaying ->
           Triple(
@@ -3786,7 +4107,8 @@ class HypaKeyboardPanelView(
           Triple(
             askGlyph(if (edited) R.drawable.ic_key_check else R.drawable.ic_mode_audio, label),
             if (edited) doneTitle else firstLine,
-            undo + askCircle(R.drawable.ic_audio_play, "Play", Color.TRANSPARENT, label) { resumeTts(); refreshAsk() },
+            undo.dropLast(1) + askAction("Share", label) { shareTtsAudio() } + reply +
+              askCircle(R.drawable.ic_audio_play, "Play", Color.TRANSPARENT, label) { resumeTts(); refreshAsk() },
           )
         outcome == AskOutcome.REPLACED || outcome == AskOutcome.INSERTED ->
           Triple(if (statusFaded) null else askGlyph(R.drawable.ic_key_check, label), status(doneTitle), undo)
@@ -3874,9 +4196,23 @@ class HypaKeyboardPanelView(
       1f,
     )
     if (turn?.error == null) turn?.summary?.let { body(it, -2f, 0.55f) }
+    turn?.picture?.let { file ->
+      android.graphics.BitmapFactory.decodeFile(file.absolutePath)?.let { bitmap ->
+        gap(10)
+        stack.addView(
+          ImageView(context).apply {
+            setImageBitmap(bitmap)
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_START
+            contentDescription = "Picture from Hypa"
+          },
+          LayoutParams(LayoutParams.MATCH_PARENT, dp(160)),
+        )
+      }
+    }
     if (askWantsReply && turn?.suggestions?.isNotEmpty() == true) {
       gap(10)
-      stack.addView(askSuggestionStrip(turn.suggestions, keyBg, label))
+      stack.addView(askPillStrip(turn.suggestions.map { text -> text to { sendAskSuggestion(text) } }, keyBg, label))
     }
 
     // What actually happened, in plain words: tools that ran, where the text went, audio.
@@ -3932,7 +4268,8 @@ class HypaKeyboardPanelView(
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dp(40))
-        if (turn?.text?.isNotEmpty() == true) addView(askAction(if (askCopied) "Copied" else "Copy", label) { copyAskResult() })
+        if (turn?.picture != null) askPictureActions(turn, label).forEach { addView(it) }
+        else if (turn?.text?.isNotEmpty() == true) addView(askAction(if (askCopied) "Copied" else "Copy", label) { copyAskResult() })
         if (turn?.outcome != null) addView(askAction("Reply", label) { replyToAsk() })
         if (turn?.speak == true && (hasShareableTts() || turn.audioUrl != null)) {
           addView(askAction("▷ Play", label) { if (hasShareableTts()) resumeTts() else playAskAudio() })
@@ -4399,6 +4736,7 @@ class HypaKeyboardPanelView(
       KeyboardTool.TEXT_EDITING -> textEditingIcon(bg, accent)
       KeyboardTool.LANGUAGES -> languagesIcon(bg, accent)
       KeyboardTool.EMOJI -> emojiIcon(bg, accent)
+      KeyboardTool.LENS -> lensIcon(bg)
       KeyboardTool.SETTINGS -> settingsIcon(bg)
     }
 
@@ -4564,7 +4902,19 @@ class HypaKeyboardPanelView(
       contextEngine.applyDeletedBeforeCursor(prefix.length)
     }
     commitTrackedText("$suggestion ", countAsTyping = true, countsCompletedWord = true)
+    predictionAddedSpace = true
     refreshAutoCaps()
+  }
+
+  /** A picked suggestion added a space; punctuation goes before it: "word ." becomes "word. ". */
+  private fun commitPunctuation(value: String) {
+    val swap = predictionAddedSpace && value in SPACE_SWAP_PUNCTUATION &&
+      contextEngine.snapshot().textBeforeCursor.endsWith(" ")
+    if (swap) {
+      inputSupplier()?.deleteSurroundingText(1, 0)
+      contextEngine.applyDeletedBeforeCursor(1)
+    }
+    applyActionResult(actionEngine.commitText(if (swap) "$value " else value))
   }
 
   private fun loginPromptChip(bg: Int, fg: Int): TextView =
@@ -4591,6 +4941,20 @@ class HypaKeyboardPanelView(
       addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
       addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
     }
+    startHostApp(intent)
+  }
+
+  private fun openLens() {
+    val intent =
+      android.content.Intent(
+          android.content.Intent.ACTION_VIEW,
+          android.net.Uri.parse("hypaintelligence://lens?use_agent=false"),
+        )
+        .apply {
+          setPackage(context.packageName)
+          addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+          addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
     startHostApp(intent)
   }
 
@@ -5412,7 +5776,7 @@ class HypaKeyboardPanelView(
               if (lastTranslationState != null) R.drawable.ic_audio_undo
               else R.drawable.ic_mode_translate,
             )
-            if (lastTranslationState != null) setColorFilter(fg) else clearColorFilter()
+            setColorFilter(fg)
             scaleType = ImageView.ScaleType.FIT_CENTER
             layoutParams =
               FrameLayout.LayoutParams(dp(16), dp(16), Gravity.CENTER)
@@ -5448,7 +5812,7 @@ class HypaKeyboardPanelView(
         addView(
           ImageView(context).apply {
             setImageResource(R.drawable.hypa_dictionary)
-            clearColorFilter()
+            setColorFilter(fg)
             scaleType = ImageView.ScaleType.FIT_CENTER
             layoutParams =
               FrameLayout.LayoutParams(dp(16), dp(16), Gravity.CENTER)
@@ -5583,6 +5947,7 @@ class HypaKeyboardPanelView(
             if (key.type == KeyboardRenderKeyType.LETTER) {
               boardLetters[view] = TextNormalizer.normalize(key.value ?: key.label.orEmpty())
             }
+            if (key.type == KeyboardRenderKeyType.SPACE) boardSpace = view
             addView(view)
           }
         },
@@ -5615,6 +5980,7 @@ class HypaKeyboardPanelView(
       val y = ev.getY(pointer)
       val nearest = keyViewAtLocal(x, y) ?: return super.dispatchTouchEvent(ev)
       val key = likelyKeyAt(nearest, x, y)
+      boardLetters[key]?.let { recordTap(it, x, y) }
       if (key === nearest) tapRedirects.remove(key) else tapRedirects[key] = nearest
       val row = key.parent as? View ?: return super.dispatchTouchEvent(ev)
       val dx = nudgeInto(x, row.left + key.left, row.left + key.right)
@@ -5631,12 +5997,7 @@ class HypaKeyboardPanelView(
     if (nearest !in boardLetters) return nearest
     val prior = currentLetterPrior()
     if (prior.isEmpty()) return nearest
-    fun offset(key: View): Pair<Float, Float> {
-      val row = key.parent as View
-      val dx = (x - (row.left + key.left + key.width / 2f)) / key.width
-      val dy = (y - (row.top + key.top + key.height / 2f)) / key.height
-      return dx to dy
-    }
+    fun offset(key: View) = tapOffset(key, x, y)
     val (nx, ny) = offset(nearest)
     if (abs(nx) < TAP_CORE && abs(ny) < TAP_CORE) return nearest
     return boardLetters.keys
@@ -5646,6 +6007,22 @@ class HypaKeyboardPanelView(
         TAP_PRIOR_WEIGHT * ln(prior[boardLetters.getValue(key)] ?: 0f) -
           (dx * dx + dy * dy) / (2 * TAP_SPREAD * TAP_SPREAD)
       } ?: nearest
+  }
+
+  private fun tapOffset(key: View, x: Float, y: Float): Pair<Float, Float> {
+    val row = key.parent as View
+    val dx = (x - (row.left + key.left + key.width / 2f)) / key.width
+    val dy = (y - (row.top + key.top + key.height / 2f)) / key.height
+    return dx to dy
+  }
+
+  private fun recordTap(letter: String, x: Float, y: Float) {
+    val penalty = HashMap<String, Float>()
+    fun fit(key: View) = tapOffset(key, x, y).let { (dx, dy) -> (dx * dx + dy * dy) / (2 * TAP_SPREAD * TAP_SPREAD) }
+    for ((key, other) in boardLetters) penalty[other] = minOf(penalty[other] ?: Float.MAX_VALUE, fit(key))
+    boardSpace?.let { penalty[TapDecoder.SPACE] = fit(it) }
+    tapTrail.add(TapFit(letter, penalty))
+    if (tapTrail.size > TAP_TRAIL_MAX) tapTrail.removeAt(0)
   }
 
   private fun currentLetterPrior(): Map<String, Float> {
@@ -5827,18 +6204,15 @@ class HypaKeyboardPanelView(
 
     when (key.action) {
       KeyboardRenderAction.COMMIT_LETTER -> Unit
-      KeyboardRenderAction.COMMIT_SYMBOL ->
-        applyActionResult(actionEngine.commitText(key.value.orEmpty()))
+      KeyboardRenderAction.COMMIT_SYMBOL -> commitPunctuation(key.value.orEmpty())
       KeyboardRenderAction.OPEN_SYMBOLS ->
         applyActionResult(actionEngine.openSymbols())
       KeyboardRenderAction.TOGGLE_SYMBOL_PAGE ->
         applyActionResult(actionEngine.toggleSymbolPage())
       KeyboardRenderAction.RETURN_TO_ALPHABET ->
         applyActionResult(actionEngine.returnToAlphabet())
-      KeyboardRenderAction.COMMIT_COMMA ->
-        applyActionResult(actionEngine.commitText(","))
-      KeyboardRenderAction.COMMIT_PERIOD ->
-        applyActionResult(actionEngine.commitText("."))
+      KeyboardRenderAction.COMMIT_COMMA -> commitPunctuation(",")
+      KeyboardRenderAction.COMMIT_PERIOD -> commitPunctuation(".")
       KeyboardRenderAction.COMMIT_DOT_COM ->
         applyActionResult(actionEngine.commitText(".com"))
       KeyboardRenderAction.COMMIT_EMAIL_AWARE_COMMA_OR_AT ->
@@ -5922,7 +6296,11 @@ class HypaKeyboardPanelView(
 
   private fun refreshAutoCaps() {
     if (pickerSearchActive) return
-    if (typingEngine.updateAutoCaps(contextEngine.snapshot().textBeforeCursor)) {
+    // Ask's box is the keyboard's own text, so capitals follow it, not the app's field.
+    val changed =
+      if (askCapturesKeys) typingEngine.updateAutoCaps(askInput.takeLast(256), AutoCapMode.SENTENCES)
+      else typingEngine.updateAutoCaps(contextEngine.snapshot().textBeforeCursor)
+    if (changed) {
       updateLetterKeyLabels()
     }
   }
@@ -6003,11 +6381,8 @@ class HypaKeyboardPanelView(
               previewText = display,
               restoresShiftOnCancel = true,
             ) {
-              if (capturesTyping) {
-                updatePickerSearchQuery(if (typingEngine.isUppercaseActive()) upper else lower)
-              } else {
-                applyActionResult(actionEngine.commitLetter(lower, upper))
-              }
+              // Also feeds Ask and search, and turns one-tap Shift off after the letter.
+              applyActionResult(actionEngine.commitLetter(lower, upper))
             },
           )
         }
@@ -6023,11 +6398,7 @@ class HypaKeyboardPanelView(
       display,
       restoresShiftOnCancel = true,
     ) {
-      if (capturesTyping) {
-        updatePickerSearchQuery(if (typingEngine.isUppercaseActive()) upper else lower)
-      } else {
-        applyActionResult(actionEngine.commitLetter(lower, upper))
-      }
+      applyActionResult(actionEngine.commitLetter(lower, upper))
     }
     tv.tag = lower
     letterKeyViews.add(tv)
@@ -6749,7 +7120,8 @@ class HypaKeyboardPanelView(
               committedOnDown = false
               showCursorOverlay()
             }.also {
-              mainHandler.postDelayed(it, longPressDurationMs)
+              // Like iOS: no cursor drag while Ask or search is taking the typing.
+              if (!capturesTyping) mainHandler.postDelayed(it, longPressDurationMs)
             }
           return true
         }
@@ -6918,11 +7290,19 @@ class HypaKeyboardPanelView(
   private inner class TapTouch(
     private val ignoreWhen: (() -> Boolean)? = null,
     private val allowParentScroll: Boolean = false,
+    private val onLongPress: (() -> Unit)? = null,
     private val onTap: (View) -> Unit,
   ) : OnTouchListener {
     private var downX = 0f
     private var downY = 0f
     private var movedBeyondSlop = false
+    private var longPress: Runnable? = null
+    private var longPressed = false
+
+    private fun cancelLongPress() {
+      longPress?.let(mainHandler::removeCallbacks)
+      longPress = null
+    }
 
     override fun onTouch(v: View, event: MotionEvent): Boolean {
       if (allowParentScroll) {
@@ -6933,16 +7313,30 @@ class HypaKeyboardPanelView(
         MotionEvent.ACTION_DOWN -> {
           if (ignoreWhen?.invoke() == true) return true
           applyPressedState(v, true)
+          longPressed = false
+          onLongPress?.let { action ->
+            longPress = Runnable {
+              longPress = null
+              longPressed = true
+              applyPressedState(v, false)
+              pulse()
+              action()
+            }.also { mainHandler.postDelayed(it, ViewConfiguration.getLongPressTimeout().toLong()) }
+          }
           return true
         }
 
         MotionEvent.ACTION_MOVE -> {
-          applyPressedState(v, isWithinTouchBounds(v, event))
+          val inside = isWithinTouchBounds(v, event)
+          if (!inside) cancelLongPress()
+          applyPressedState(v, inside && !longPressed)
           return true
         }
 
         MotionEvent.ACTION_UP -> {
+          cancelLongPress()
           applyPressedState(v, false)
+          if (longPressed) return true
           if (ignoreWhen?.invoke() == true) return true
           if (!isWithinTouchBounds(v, event)) return true
           onTap(v)
@@ -6951,6 +7345,7 @@ class HypaKeyboardPanelView(
         }
 
         MotionEvent.ACTION_CANCEL -> {
+          cancelLongPress()
           applyPressedState(v, false)
           return true
         }
@@ -7014,10 +7409,18 @@ class HypaKeyboardPanelView(
           deleteOnce()
           playKeySound()
           pulse()
+          var ticks = 0
           repeatRunnable =
             object : Runnable {
               override fun run() {
-                deleteOnce()
+                ticks += 1
+                // Like other keyboards: letters for about a second, then a whole word every few ticks.
+                if (ticks <= DELETE_LETTERS_TICKS) {
+                  deleteOnce()
+                } else if (ticks % DELETE_WORD_EVERY_TICKS == 0) {
+                  val before = if (capturesTyping) askInput else contextEngine.snapshot().textBeforeCursor
+                  repeat(maxOf(1, trailingWordLength(before))) { deleteOnce() }
+                }
                 mainHandler.postDelayed(this, 50L)
               }
             }.also {
@@ -7120,7 +7523,7 @@ class HypaKeyboardPanelView(
     iconRes: Int,
     contentDescriptionText: String,
     bg: Int,
-    tint: Int? = null,
+    tint: Int,
     iconSizeDp: Int = 12,
     onClick: () -> Unit,
   ): FrameLayout =
@@ -7136,7 +7539,7 @@ class HypaKeyboardPanelView(
       addView(
         ImageView(context).apply {
           setImageResource(iconRes)
-          if (tint == null) clearColorFilter() else setColorFilter(tint)
+          setColorFilter(tint)
           scaleType = ImageView.ScaleType.FIT_CENTER
           isClickable = false
           isFocusable = false
@@ -7151,7 +7554,7 @@ class HypaKeyboardPanelView(
       iconRes = R.drawable.ic_mode_translate,
       contentDescriptionText = "Translate mode",
       bg = if (featureMode == FeatureMode.TRANSLATE) activeTint else bg,
-      tint = null,
+      tint = if (featureMode == FeatureMode.TRANSLATE) Color.WHITE else color("label", "#EAEAEE"),
       iconSizeDp = 16,
     ) {
       activateTool(KeyboardTool.TRANSLATE)
@@ -7164,7 +7567,7 @@ class HypaKeyboardPanelView(
       iconRes = R.drawable.hypa_dictionary,
       contentDescriptionText = "Dictionary mode",
       bg = if (featureMode == FeatureMode.DICTIONARY) activeTint else bg,
-      tint = null,
+      tint = if (featureMode == FeatureMode.DICTIONARY) Color.WHITE else color("label", "#EAEAEE"),
       iconSizeDp = 16,
     ) {
       activateTool(KeyboardTool.DICTIONARY)
@@ -7224,6 +7627,17 @@ class HypaKeyboardPanelView(
       iconSizeDp = 16,
     ) {
       activateTool(KeyboardTool.EMOJI)
+    }
+
+  private fun lensIcon(bg: Int): FrameLayout =
+    toolbarIcon(
+      iconRes = R.drawable.ic_mode_lens,
+      contentDescriptionText = "Lens",
+      bg = bg,
+      tint = color("label", "#EAEAEE"),
+      iconSizeDp = 16,
+    ) {
+      activateTool(KeyboardTool.LENS)
     }
 
   private fun settingsIcon(bg: Int): FrameLayout =
@@ -7329,10 +7743,7 @@ class HypaKeyboardPanelView(
           addView(
             ImageView(context).apply {
               setImageResource(toolIconRes(tool))
-              when (tool) {
-                KeyboardTool.TRANSLATE, KeyboardTool.DICTIONARY -> clearColorFilter()
-                else -> setColorFilter(if (isToolActive(tool)) Color.WHITE else labelColor)
-              }
+              setColorFilter(if (isToolActive(tool)) Color.WHITE else labelColor)
               scaleType = ImageView.ScaleType.FIT_CENTER
               layoutParams = FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER)
             },
@@ -7362,13 +7773,14 @@ class HypaKeyboardPanelView(
     when (tool) {
       KeyboardTool.ASK -> R.drawable.ic_mode_ask
       KeyboardTool.TRANSLATE -> R.drawable.ic_mode_translate
-      KeyboardTool.VOICE -> R.drawable.ic_audio_mic
+      KeyboardTool.VOICE -> R.drawable.ic_mode_transcribe
       KeyboardTool.SPEAK -> R.drawable.ic_mode_audio
       KeyboardTool.DICTIONARY -> R.drawable.hypa_dictionary
       KeyboardTool.CLIPBOARD -> R.drawable.ic_keyboard_clipboard
       KeyboardTool.TEXT_EDITING -> R.drawable.ic_keyboard_text_editing
       KeyboardTool.LANGUAGES -> R.drawable.ic_hypa_logo_mark
       KeyboardTool.EMOJI -> R.drawable.ic_emoji_smileys
+      KeyboardTool.LENS -> R.drawable.ic_mode_lens
       KeyboardTool.SETTINGS -> R.drawable.ic_audio_settings
     }
 
@@ -7383,6 +7795,7 @@ class HypaKeyboardPanelView(
       KeyboardTool.TEXT_EDITING -> "Editing"
       KeyboardTool.LANGUAGES -> "Languages"
       KeyboardTool.EMOJI -> "Emoji"
+      KeyboardTool.LENS -> "Lens"
       KeyboardTool.SETTINGS -> "Settings"
     }
 
@@ -7397,6 +7810,7 @@ class HypaKeyboardPanelView(
       KeyboardTool.TEXT_EDITING -> featureMode == FeatureMode.TEXT_EDITING
       KeyboardTool.LANGUAGES -> featureMode == FeatureMode.KEYBOARD_LANGUAGE_PICKER
       KeyboardTool.EMOJI -> featureMode == FeatureMode.EMOJI
+      KeyboardTool.LENS -> false
       KeyboardTool.SETTINGS -> false
     }
 
@@ -7425,6 +7839,7 @@ class HypaKeyboardPanelView(
           }
       KeyboardTool.EMOJI ->
         if (featureMode == FeatureMode.EMOJI) featureMode = FeatureMode.KEYBOARD else openEmojiPanel()
+      KeyboardTool.LENS -> openLens()
       KeyboardTool.SETTINGS -> openHostAppSettings()
     }
     rebuild()
@@ -10718,7 +11133,7 @@ class HypaKeyboardPanelView(
     val accent = color("accent", "#3B82F6")
     val label = color("label", "#EAEAEE")
     val btn = ImageView(context).apply {
-      setImageResource(R.drawable.ic_audio_mic)
+      setImageResource(R.drawable.ic_mode_transcribe)
       setColorFilter(if (isSttListening) Color.WHITE else label)
       contentDescription = "Voice input"
       scaleType = ImageView.ScaleType.CENTER_INSIDE

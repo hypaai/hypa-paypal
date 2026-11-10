@@ -1,5 +1,6 @@
 import AVFoundation
 import ExpoModulesCore
+import Photos
 
 private let appGroupId = "group.com.hypaintelligence.hypaintelligence"
 private let legacyAppGroupId = "group.com.hypaintelligence.keyboard"
@@ -189,42 +190,66 @@ public class HypaKeyboardStorageModule: Module {
     Function("stopKeyboardMic") {
       KeyboardMic.shared.shutdown()
     }
+
+    AsyncFunction("savePicture") { (uri: URL, _: String, promise: Promise) in
+      PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+        guard status == .authorized || status == .limited else {
+          return promise.reject("PhotosDenied", "Allow Hypa Intelligence to add photos in Settings.")
+        }
+        PHPhotoLibrary.shared().performChanges({
+          PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: uri)
+        }) { saved, error in
+          saved ? promise.resolve(nil)
+            : promise.reject("SaveFailed", error?.localizedDescription ?? "Couldn't save the picture.")
+        }
+      }
+    }
   }
 }
 
 // Must match KeyboardViewController's copies.
 private let keyboardMicStart = "com.hypaintelligence.keyboard-mic.start"
 private let keyboardMicStop = "com.hypaintelligence.keyboard-mic.stop"
+private let keyboardMicCancel = "com.hypaintelligence.keyboard-mic.cancel"
 private let keyboardMicHeartbeatKey = "keyboard_mic_heartbeat"
 private let keyboardMicFileName = "keyboard-mic.pcm"
 private let keyboardMicOwnerKey = "keyboard_mic_owner"
 
 /// iOS keyboards can't use the microphone, so the app records for them. Opened once
-/// from the keyboard, the app keeps the mic running in the background (audio
-/// background mode), so later taps start without leaving the keyboard. The keyboard
-/// sends start/stop as Darwin notifications and gets 16 kHz mono PCM back as a file
-/// in the App Group container. A heartbeat in shared defaults tells it the mic is live.
+/// from the keyboard, the app keeps the mic warm for a minute afterwards (audio
+/// background mode), so the next tap starts without leaving the keyboard. The keyboard
+/// sends start/stop/cancel as Darwin notifications and gets 16 kHz mono PCM back as a
+/// file in the App Group container. A heartbeat in shared defaults tells it the mic is live.
 private final class KeyboardMic {
   static let shared = KeyboardMic()
-  // ponytail: one idle window for both warm mic and abandoned captures.
-  private static let idleTimeout: TimeInterval = 5 * 60
+  /// How long the mic stays warm after the last start, stop, or cancel.
+  private static let idleTimeout: TimeInterval = 60
+  /// Safety cap from when this page opens. The keyboard's own 30s starts when
+  /// the user is back at the keyboard, so this must be long enough to cover
+  /// the trip back plus that take. A short cap here cuts the words off.
+  private static let maxCapture: TimeInterval = 120
 
   private let engine = AVAudioEngine()
   private let queue = DispatchQueue(label: "hypa.keyboard-mic")
   private var pcm = Data()
   private var capturing = false
+  private var captureStartedAt = Date()
   private var lastActivity = Date()
   private var heartbeat: Timer?
 
   private init() {
     let center = CFNotificationCenterGetDarwinNotifyCenter()
-    for name in [keyboardMicStart, keyboardMicStop] {
+    for name in [keyboardMicStart, keyboardMicStop, keyboardMicCancel] {
       CFNotificationCenterAddObserver(
         center, Unmanaged.passUnretained(self).toOpaque(),
         { _, _, name, _, _ in
-          let isStart = name?.rawValue as String? == keyboardMicStart
+          let raw = name?.rawValue as String?
           DispatchQueue.main.async {
-            isStart ? KeyboardMic.shared.beginCapture() : KeyboardMic.shared.endCapture()
+            switch raw {
+            case keyboardMicStart: KeyboardMic.shared.beginCapture()
+            case keyboardMicCancel: KeyboardMic.shared.discardCapture()
+            default: KeyboardMic.shared.endCapture()
+            }
           }
         }, name as CFString, nil, .deliverImmediately)
     }
@@ -264,6 +289,7 @@ private final class KeyboardMic {
   private func beginCapture() {
     guard engine.isRunning else { return }
     lastActivity = Date()
+    captureStartedAt = lastActivity
     queue.sync {
       pcm = Data()
       capturing = true
@@ -278,15 +304,42 @@ private final class KeyboardMic {
       defer { pcm = Data() }
       return pcm
     }
-    guard let data,
+    guard
       let url = FileManager.default
         .containerURL(forSecurityApplicationGroupIdentifier: appGroupId)?
         .appendingPathComponent(keyboardMicFileName)
     else { return }
-    try? data.write(to: url, options: .atomic)
+    if let data {
+      try? data.write(to: url, options: .atomic)
+    } else if !FileManager.default.fileExists(atPath: url.path) {
+      // Not recording: answer with an empty file so Stop shows "No audio" now. Keep a
+      // take the safety cap already saved.
+      try? Data().write(to: url, options: .atomic)
+    }
+  }
+
+  /// Cancel throws the take away. Stop is the call that writes the file.
+  private func discardCapture() {
+    lastActivity = Date()
+    queue.sync {
+      capturing = false
+      pcm = Data()
+    }
+    if let url = FileManager.default
+      .containerURL(forSecurityApplicationGroupIdentifier: appGroupId)?
+      .appendingPathComponent(keyboardMicFileName)
+    {
+      try? FileManager.default.removeItem(at: url)
+    }
   }
 
   private func tick() {
+    // A call, Siri, or a headphone change stops the engine. Drop the heartbeat so
+    // the keyboard opens the app again instead of talking to a dead mic.
+    guard engine.isRunning else { return shutdown() }
+    if queue.sync(execute: { capturing }) {
+      if Date().timeIntervalSince(captureStartedAt) >= Self.maxCapture { endCapture() } else { lastActivity = Date() }
+    }
     guard Date().timeIntervalSince(lastActivity) < Self.idleTimeout else { return shutdown() }
     UserDefaults(suiteName: appGroupId)?
       .set(Date().timeIntervalSince1970, forKey: keyboardMicHeartbeatKey)

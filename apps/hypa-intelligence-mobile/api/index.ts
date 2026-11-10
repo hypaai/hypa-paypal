@@ -4,6 +4,9 @@ import axios, {
   type AxiosRequestConfig,
   type AxiosResponse,
 } from 'axios';
+import Constants from 'expo-constants';
+import { ANALYTICS, analyticsHeaders } from '@hypa/config/analytics';
+import { analytics } from '@/lib/analytics';
 import {
   getSettingsJson,
   parseKeyboardSettings,
@@ -11,6 +14,8 @@ import {
 } from '@/lib/keyboard-settings';
 
 export const API_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://api.hypaintelligence.com';
+
+const attribution = analyticsHeaders('hypa-intelligence-mobile', Constants.expoConfig?.version);
 
 const API_LOG_PREFIX = '[HypaKeyboard][API]';
 
@@ -61,6 +66,7 @@ export const api = axios.create({
   baseURL: API_URL,
   timeout: 0,
   headers: {
+    ...attribution,
     'Content-Type': 'application/json; charset=utf-8',
     Accept: 'application/json; charset=utf-8',
   },
@@ -77,6 +83,10 @@ api.interceptors.request.use((config) => {
     config.headers.set('Authorization', `Bearer ${token.trim()}`);
   } else {
     config.headers.delete('Authorization');
+
+    const anonId = analytics.anonId();
+
+    if (anonId) config.headers.set(ANALYTICS.headers.anonId, anonId);
   }
 
   console.log(`${API_LOG_PREFIX} request`, {

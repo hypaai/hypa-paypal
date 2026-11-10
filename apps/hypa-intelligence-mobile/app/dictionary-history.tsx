@@ -199,7 +199,7 @@ const DictionaryHistory = () => {
     <Body showBackground={false} enableScroll={false}>
       <View className="flex-1 px-1 pt-4">
         <View className="mb-5 flex-row items-center justify-between">
-          <BackButton onPress={() => goBackOrReturnTo(returnTo, '/(dashboard)/dictionary')} />
+          <BackButton close onPress={() => goBackOrReturnTo(returnTo, '/(dashboard)/dictionary')} />
           <Text className="text-[20px] text-zinc-900 dark:text-zinc-50" style={{ fontFamily: FONTS.main.medium }}>
             Dictionary History
           </Text>

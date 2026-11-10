@@ -22,6 +22,8 @@ class LanguagePack private constructor(
     return lowerBound(prefix + Char.MAX_VALUE) - lowerBound(prefix)
   }
 
+  fun commonOfLength(length: Int): List<String> = common?.filter { it.length == length }.orEmpty()
+
   fun canonical(normalized: String): String? =
     accented[normalized] ?: normalized.takeIf { plain?.contains(it) == true }
 

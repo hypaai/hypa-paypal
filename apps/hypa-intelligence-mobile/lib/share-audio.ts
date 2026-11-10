@@ -31,8 +31,13 @@ export const shareAudioFromUri = async (uri: string, mimeType: string): Promise<
   return true;
 };
 
+/** Settings key the keyboard writes before opening `hypaintelligence://share-audio`. */
 export const ASK_SHARE_AUDIO_KEY = 'askShareAudio';
 
+/**
+ * Turns the keyboard's Ask Hypa audio into a local file the share sheet can use.
+ * Anonymous replies arrive as a WAV data URL; signed-in replies as a signed API path.
+ */
 export const askAudioToFile = async (
   audio: string,
   apiUrl: string,

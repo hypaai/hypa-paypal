@@ -45,8 +45,17 @@ class PersonalVocabulary(context: Context) {
     get() = loaded
 
   @Synchronized
-  fun contains(word: String): Boolean =
-    (words[TextNormalizer.normalize(word)] ?: 0) >= PROTECT_MIN_USES
+  fun contains(word: String): Boolean {
+    val key = TextNormalizer.normalize(word)
+    return key in deviceWords || (words[key] ?: 0) >= PROTECT_MIN_USES
+  }
+
+  /** Words and shortcuts from the device's user dictionary. Never corrected; not saved. */
+  @Volatile private var deviceWords: Set<String> = emptySet()
+
+  fun setDeviceWords(list: Collection<String>) {
+    deviceWords = list.map(TextNormalizer::normalize).filter { it.isNotEmpty() }.toSet()
+  }
 
   @Synchronized
   fun usageWeight(word: String): Float {

@@ -63,7 +63,9 @@ struct KeyboardSettings {
     ttsLanguage: String? = nil,
     translateSourceLanguage: String? = nil,
     translateTargetLanguage: String? = nil,
-    dictionaryLanguage: String? = nil
+    dictionaryLanguage: String? = nil,
+    assistantProvider: String? = nil,
+    assistantModel: String? = nil
   ) -> KeyboardSettings {
     KeyboardSettings(
       themeLight: themeLight,
@@ -87,8 +89,8 @@ struct KeyboardSettings {
       ttsModel: ttsModel,
       sttProvider: sttProvider,
       sttModel: sttModel,
-      assistantProvider: assistantProvider,
-      assistantModel: assistantModel,
+      assistantProvider: assistantProvider ?? self.assistantProvider,
+      assistantModel: assistantModel ?? self.assistantModel,
       voice: voice ?? self.voice,
       ttsLanguage: ttsLanguage ?? self.ttsLanguage,
       translateSourceLanguage: translateSourceLanguage ?? self.translateSourceLanguage,

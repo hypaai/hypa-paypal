@@ -97,10 +97,12 @@ class KeyboardViewController: UIInputViewController {
   private static let keyHapticIntensity: CGFloat = 0.75
 
   private enum ToolbarErrorSlot: Int {
-    case modeBar = 1, clipboard, textEditing, translate, dictionary, stt, tts
+    case modeBar = 1, clipboard, textEditing, translate, dictionary, stt, tts, ask
   }
 
   private let toolbarErrorDuration: TimeInterval = 3.5
+  /// Ask's message stands in for its whole bar, so it is short, and a tap clears it.
+  private let askErrorDuration: TimeInterval = 2
   private var toolbarErrors: [ToolbarErrorSlot: String] = [:]
   private var toolbarErrorTimers: [ToolbarErrorSlot: Timer] = [:]
 
@@ -131,7 +133,6 @@ class KeyboardViewController: UIInputViewController {
   private var isRestoringTranslation = false
   private var isMutatingTranslationDocument = false
   private var isTraversingDocument = false
-  private var suppressTranslationUndoHostSyncUntil: TimeInterval = 0
   private var translationTask: URLSessionDataTask?
   private var locallyTypedText = ""
   private let localTextCacheLimit = 4000
@@ -272,11 +273,13 @@ class KeyboardViewController: UIInputViewController {
   // hypa-keyboard-storage). Names must match that file.
   private static let micStartNotification = "com.hypaintelligence.keyboard-mic.start"
   private static let micStopNotification = "com.hypaintelligence.keyboard-mic.stop"
+  private static let micCancelNotification = "com.hypaintelligence.keyboard-mic.cancel"
   private static let micHeartbeatKey = "keyboard_mic_heartbeat"
   private static let micFileName = "keyboard-mic.pcm"
-  /// Which tool ("stt" or "ask") is recording, and since when, so a fresh keyboard resumes it.
+  /// Which tool ("stt" or "ask") is recording, so a fresh keyboard resumes it.
   private static let micOwnerKey = "keyboard_mic_owner"
-  private static let micStartedAtKey = "keyboard_mic_started_at"
+  /// Longest recording. Must match KeyboardMic.maxCapture in the app.
+  private static let maxAppMicRecording: TimeInterval = 30
   private var sttRecordedWav: Data?
   private var isSttStarting = false
   private var isSttListening = false
@@ -602,6 +605,10 @@ class KeyboardViewController: UIInputViewController {
     syncKeyboardLanguageToModel()
     buildKeyboard()
     emojiRepository.warmup()
+    loadSupplementaryLexicon()
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(askDraftScreenLocked),
+      name: UIApplication.protectedDataWillBecomeUnavailableNotification, object: nil)
   }
 
   override func viewWillAppear(_ animated: Bool) {
@@ -631,12 +638,16 @@ class KeyboardViewController: UIInputViewController {
     boardMode = .alphabet
     syncBoardModeToHostField()
     hostFieldSignature = currentHostFieldSignature()
-    resumeAskCamera()
     resumeAppMic()
+    restoreAskDraftIfKept()
     rebuildKeyboard()
     publishPredictionContext()
     DispatchQueue.main.async { [weak self] in self?.insertSharedPaymentLink() }
     if usesNeuralEngine { modelQueue.async { [tinyKeys] in tinyKeys.load() } }
+  }
+
+  deinit {
+    NotificationCenter.default.removeObserver(self)
   }
 
   override func didReceiveMemoryWarning() {
@@ -665,6 +676,12 @@ class KeyboardViewController: UIInputViewController {
     stopDeleteRepeat(refreshUI: false)
     stopSttListening()
     stopSttPreview()
+    // A plain close forgets the draft. A lock or a rotation keeps the typed text only.
+    if askDraftInterrupted, featureMode == .ask, askTurn == nil {
+      saveAskDraft()
+    } else {
+      clearAskDraft()
+    }
     resetAsk()
     stopTts()
     translationTask?.cancel()
@@ -702,12 +719,8 @@ class KeyboardViewController: UIInputViewController {
     {
       discardTranslationUndo()
     }
-    if lastTranslationState != nil
-      && !isTraversingDocument
-      && Date().timeIntervalSince1970 >= suppressTranslationUndoHostSyncUntil
-    {
-      discardTranslationUndo()
-    }
+    // Armed Undo stays: iOS also sends this on a plain tap in many apps. Keyboard edits clear it
+    // directly, and Undo checks the text is unchanged before restoring anything.
     if syncBoardModeToHostField() || resetBoard { rebuildKeyboard() }
     updateTextEditingState()
     refreshReturnKeyIfNeeded()
@@ -726,6 +739,11 @@ class KeyboardViewController: UIInputViewController {
       showModeBarUntilNextTyping = false
       rebuildKeyboard()
       return
+    }
+    // A tap in the app's text box sends typing there; tapping the Ask box brings it back.
+    if askCapturesKeys && !isApplyingKeyboardText && !isTraversingDocument {
+      askFocused = false
+      refreshAsk()
     }
     if resetTypingSessionIfHostFieldChanged() { rebuildKeyboard() }
     updateTextEditingState()
@@ -771,6 +789,17 @@ class KeyboardViewController: UIInputViewController {
     }
   }
 
+  override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+    super.viewWillTransition(to: size, with: coordinator)
+    askDraftRotatedAt = Date()
+    saveAskDraft()
+    coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+      // The same keyboard survived the turn, so the text is still in memory.
+      guard let self, self.view.window != nil else { return }
+      self.clearAskDraft()
+    }
+  }
+
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
     layoutKeyboard()
@@ -795,6 +824,7 @@ class KeyboardViewController: UIInputViewController {
     case .dictionary: return .dictionary
     case .stt: return .stt
     case .tts: return .tts
+    case .ask: return .ask
     }
   }
 
@@ -803,17 +833,13 @@ class KeyboardViewController: UIInputViewController {
     toolbarErrorTimers[slot]?.invalidate()
     toolbarErrors[slot] = msg
     toolbarErrorTimers[slot] = Timer.scheduledTimer(
-      withTimeInterval: toolbarErrorDuration, repeats: false
+      withTimeInterval: slot == .ask ? askErrorDuration : toolbarErrorDuration, repeats: false
     ) {
       [weak self] _ in
       DispatchQueue.main.async {
         self?.toolbarErrors[slot] = nil
         self?.toolbarErrorTimers[slot] = nil
-        if slot == .modeBar {
-          self?.rebuildKeyboard()
-        } else {
-          self?.updateUI()
-        }
+        self?.refreshToolbar(for: slot)
       }
     }
     devLog("ToolbarError[%@]: %@", String(describing: slot), msg)
@@ -821,10 +847,14 @@ class KeyboardViewController: UIInputViewController {
       closePickerSearch(overrideReturnMode: headerFeatureMode(for: slot))
       return
     }
-    if slot == .modeBar {
-      rebuildKeyboard()
-    } else {
-      updateUI()
+    refreshToolbar(for: slot)
+  }
+
+  private func refreshToolbar(for slot: ToolbarErrorSlot) {
+    switch slot {
+    case .modeBar: rebuildKeyboard()
+    case .ask: refreshAsk()
+    default: updateUI()
     }
   }
 
@@ -832,7 +862,7 @@ class KeyboardViewController: UIInputViewController {
     toolbarErrorTimers[slot]?.invalidate()
     toolbarErrorTimers[slot] = nil
     guard toolbarErrors.removeValue(forKey: slot) != nil else { return }
-    if slot == .modeBar { rebuildKeyboard() } else { updateUI() }
+    refreshToolbar(for: slot)
   }
 
   @objc private func dismissToolbarErrorTap(_ gesture: UITapGestureRecognizer) {
@@ -948,7 +978,10 @@ class KeyboardViewController: UIInputViewController {
 
   private func updateAutoCaps(before: String) {
     guard boardMode == .alphabet else { return }
-    let wanted = capMode.appliesAt(before)
+    // Ask's box is the keyboard's own text, so capitals follow it, not the app's field.
+    let wanted =
+      askCapturesKeys
+      ? AutoCapMode.sentences.appliesAt(String(askInput.suffix(256))) : capMode.appliesAt(before)
     if !wanted { autoShiftDismissed = false }
     let nextAuto = wanted && !autoShiftDismissed && shiftState == .off
     if nextAuto != isAutoShifted {
@@ -1860,6 +1893,9 @@ class KeyboardViewController: UIInputViewController {
     case .emoji:
       if featureMode == .emoji { featureMode = .keyboard } else { openEmojiPanel() }
 
+    case .lens:
+      openLens()
+
     case .settings:
       openHostAppForSettings()
     }
@@ -2310,6 +2346,7 @@ class KeyboardViewController: UIInputViewController {
       btn.addAction(UIAction { [weak self] _ in self?.undoTranslation() }, for: .touchUpInside)
     } else {
       btn.setImage(iconImage(for: "mode-translate"), for: .normal)
+      btn.tintColor = settings.theme.label
       btn.imageView?.contentMode = .scaleAspectFit
       btn.contentEdgeInsets = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
       btn.accessibilityLabel = "Translate"
@@ -2332,7 +2369,6 @@ class KeyboardViewController: UIInputViewController {
 
   private struct AskTurn {
     var requestId = UUID().uuidString.lowercased()
-    var fromCamera = false
     var payload: [String: Any] = [:]
     var sentSelection: String?
     var sentDocument: String?
@@ -2345,12 +2381,14 @@ class KeyboardViewController: UIInputViewController {
     var suggestions: [String] = []
     var speak = false
     var audioURL: String?
+    var picture: Data?
+    var pictureURL: URL?
     var chatId: String?
     var outcome: AskOutcome?
     var error: String?
     var errorDetail: String?
     var retryable = true
-    /// Draft order from Hypa's payment tool, waiting for the merchant's tap in the app.
+    /// A payment order the merchant must approve in the app.
     var approval: [String: Any]?
   }
 
@@ -2362,9 +2400,71 @@ class KeyboardViewController: UIInputViewController {
     "look_up_term": ("Looking up the word", "Looked up"),
     "extract_text_from_image": ("Reading the image", "Read image"),
     "translate_and_speak": ("Translating and speaking", "Translated and spoke"),
+    "current_time": ("Checking the time", "Checked the time"),
+    "weather": ("Checking the weather", "Checked the weather"),
+    "web_search": ("Searching the web", "Searched the web"),
   ]
 
+  /// How long a lock or a rotation may keep the typed Ask text.
+  private static let askDraftKeepSeconds: TimeInterval = 10 * 60
+  /// A screen lock counts only when it happens this close to the keyboard going away.
+  private static let askDraftLinkSeconds: TimeInterval = 3
+  private static let askDraftTextKey = "ask_draft_text"
+  private static let askDraftAtKey = "ask_draft_at"
+  private static let askDraftFieldKey = "ask_draft_field"
+  private var askDraftLockedAt: Date?
+  private var askDraftRotatedAt: Date?
+
+  private var askDraftInterrupted: Bool {
+    let now = Date()
+    if let locked = askDraftLockedAt, now.timeIntervalSince(locked) <= Self.askDraftLinkSeconds { return true }
+    if let rotated = askDraftRotatedAt, now.timeIntervalSince(rotated) <= Self.askDraftLinkSeconds { return true }
+    return false
+  }
+
+  /// The typed Ask text only. A reply that is already showing is left out, same as Android.
+  private func saveAskDraft() {
+    guard featureMode == .ask, askTurn == nil, textDocumentProxy.isSecureTextEntry != true else { return }
+    let defaults = keyboardSharedDefaults(reason: "saveAskDraft").defaults
+    defaults.set(askInput, forKey: Self.askDraftTextKey)
+    defaults.set(Date().timeIntervalSince1970, forKey: Self.askDraftAtKey)
+    defaults.set(textDocumentProxy.documentIdentifier.uuidString, forKey: Self.askDraftFieldKey)
+  }
+
+  private func clearAskDraft() {
+    let defaults = keyboardSharedDefaults(reason: "clearAskDraft").defaults
+    defaults.removeObject(forKey: Self.askDraftTextKey)
+    defaults.removeObject(forKey: Self.askDraftAtKey)
+    defaults.removeObject(forKey: Self.askDraftFieldKey)
+  }
+
+  private func restoreAskDraftIfKept() {
+    guard !isAskRecording else { return }
+    let defaults = keyboardSharedDefaults(reason: "restoreAskDraft").defaults
+    let text = defaults.string(forKey: Self.askDraftTextKey)
+    let field = defaults.string(forKey: Self.askDraftFieldKey)
+    let current = textDocumentProxy.documentIdentifier.uuidString
+    guard let text, let field else { return }
+    clearAskDraft()
+    guard textDocumentProxy.isSecureTextEntry != true, field == current,
+      Date().timeIntervalSince1970 - defaults.double(forKey: Self.askDraftAtKey) <= Self.askDraftKeepSeconds
+    else { return }
+    featureMode = .ask
+    askInput = text
+    askFocused = true
+  }
+
+  @objc private func askDraftScreenLocked() {
+    askDraftLockedAt = Date()
+    saveAskDraft()
+  }
+
   private var askInput = ""
+  private var askFocused = true
+  /// Long-press on the Ask box shows Paste and Copy in its place.
+  private var askEditMenu = false
+  /// The camera button swaps the input box for Camera and Photos pills; tapping it again brings the box back.
+  private var askPhotoMenu = false
   private var askTurn: AskTurn?
   private var askTask: Task<Void, Never>?
   private var askGeneration = 0
@@ -2376,7 +2476,6 @@ class KeyboardViewController: UIInputViewController {
   private var askCopied = false
   /// Earlier turns of this Ask session, sent so Hypa can follow up on its own question.
   private var askHistory: [[String: String]] = []
-  private var askReplySuggestions: [String] = []
   /// "requestId:outcome" whose status line ("Inserted", "Original restored"…) has timed out.
   private var askStatusFadedKey: String?
   private var askStatusTimerKey: String?
@@ -2384,8 +2483,17 @@ class KeyboardViewController: UIInputViewController {
 
   private var askNeedsFullAccess: Bool { !hasFullAccess }
 
+  /// Ask's last autocorrection, undone if backspace is the very next key.
+  private var askCorrection: (original: String, replacement: String)?
+  private var askLastSpaceTime: TimeInterval = 0
+  /// A picked suggestion just added a space after the word.
+  private var predictionAddedSpace = false
+  private var textShortcuts: [String: String] = [:]
+  private static let spaceSwapPunctuation: Set<String> = [".", ",", "?", "!", ":", ";"]
+
   private var askCapturesKeys: Bool {
-    featureMode == .ask && !askNeedsFullAccess && !askShowsDetails && askTurn == nil && !isAskRecording
+    featureMode == .ask && askFocused && !askNeedsFullAccess && !askShowsDetails && askTurn == nil
+      && !isAskRecording
   }
 
   private var askCanUndo: Bool {
@@ -2396,16 +2504,101 @@ class KeyboardViewController: UIInputViewController {
 
   private func appendCapturedText(_ text: String) {
     guard askCapturesKeys else { return updatePickerSearchQuery(text) }
-    askInput.append(text)
+    askCorrection = nil
+    if text == " " {
+      finishAskSpace()
+    } else {
+      askInput.append(text)
+    }
+    askEditMenu = false
+    askPhotoMenu = false
     refreshAsk()
   }
 
   private func deleteCapturedCharacter() {
     guard askCapturesKeys else { return deletePickerSearchCharacter() }
     guard !askInput.isEmpty else { return }
-    askInput.removeLast()
+    keyHost?.clearTaps()
+    // Backspace right after a correction brings back what was typed, and that word is left alone after.
+    if let undo = askCorrection, askInput.hasSuffix("\(undo.replacement) ") {
+      askInput = String(askInput.dropLast(undo.replacement.count + 1)) + undo.original
+      correctionLedger.reject(undo.original)
+    } else {
+      askInput.removeLast()
+    }
+    askCorrection = nil
+    askLastSpaceTime = 0
+    askEditMenu = false
+    askPhotoMenu = false
     refreshAsk()
+    updateAutoCaps()
   }
+
+  /// A space in Ask: a quick second space after a word becomes ". ", otherwise the word just finished is corrected.
+  private func finishAskSpace() {
+    let now = Date().timeIntervalSinceReferenceDate
+    let doubleTap = now - askLastSpaceTime <= doubleSpacePeriodWindow
+    askLastSpaceTime = now
+    if doubleTap, askInput.hasSuffix(" "), let preceding = askInput.dropLast().last,
+      preceding.isLetter || preceding.isNumber
+    {
+      askInput = String(askInput.dropLast()) + ". "
+      askLastSpaceTime = 0
+      return
+    }
+    askInput.append(" ")
+    correctAskWord()
+  }
+
+  /// Ask's box is the keyboard's own text, so it gets the same word-end help as the host field:
+  /// the two-capitals fix, autocorrect (with the on-device model as a backup) and learning the word.
+  private func correctAskWord() {
+    var before = String(askInput.dropLast())
+    var word = String(before.reversed().prefix { $0.isLetter || $0 == "'" }.reversed())
+    guard !word.isEmpty else { return }
+    let base = String(before.dropLast(word.count))
+    if let fixed = AutoCapMode.twoInitialCapsFix(word, locale: keyboardCaseLocale) {
+      word = fixed
+      before = base + fixed
+      askInput = before + " "
+    }
+    if let expansion = textShortcuts[word.lowercased()] {
+      askInput = base + expansion + " "
+      askCorrection = (word, expansion)
+      return
+    }
+    let previousWord = String(
+      base.trimmingCharacters(in: .whitespaces).reversed().prefix { $0.isLetter || $0 == "'" }.reversed())
+    guard settings.autocorrectEnabled, !correctionLedger.isRejected(word) else {
+      return learnAskWord(word, after: previousWord)
+    }
+    let engine = autocorrectEngine
+    let taps = keyHost?.recentTaps ?? []
+    correctionWorker.async { [weak self] in
+      let decision = engine.evaluate(word: word, previousWord: previousWord, taps: taps)
+      DispatchQueue.main.async {
+        guard let self else { return }
+        // Typing may have gone on meanwhile; only the finished word itself is replaced.
+        guard self.askInput.hasPrefix(base + word) else { return }
+        let after = String(self.askInput.dropFirst(base.count + word.count))
+        guard after.first?.isWhitespace == true || after.hasPrefix(".") else { return }
+        let replacement =
+          (decision.action == .autoCorrect ? decision.replacement : nil) ?? self.modelWordCorrection(word)
+        guard let replacement, replacement != word else {
+          return self.learnAskWord(word, after: previousWord)
+        }
+        self.askInput = base + replacement + after
+        if after == " " { self.askCorrection = (word, replacement) }
+        self.refreshAsk()
+        self.updateAutoCaps()
+      }
+    }
+  }
+
+  private func learnAskWord(_ word: String, after previousWord: String) {
+    personalVocabulary.record(previousWord: previousWord, word: word)
+  }
+
 
   private func toggleAsk() {
     if featureMode == .ask {
@@ -2429,13 +2622,15 @@ class KeyboardViewController: UIInputViewController {
     askTask?.cancel()
     askTask = nil
     stopAskRecording(send: false)
-    if askTurn?.speak == true { stopTts() }
+    if askTurn?.speak == true { stopTtsKeepingClip() }
     askTurn = nil
     askInput = ""
+    askFocused = true
+    askEditMenu = false
+    askPhotoMenu = false
     askShowsDetails = false
     askCopied = false
     askHistory = []
-    askReplySuggestions = []
   }
 
   private var askWantsReply: Bool {
@@ -2444,45 +2639,37 @@ class KeyboardViewController: UIInputViewController {
   }
 
   private func replyToAsk() {
-    stopTts()
-    askReplySuggestions = askTurn?.suggestions ?? []
+    stopTtsKeepingClip()
     askTurn = nil
     askInput = ""
+    askFocused = true
+    askEditMenu = false
+    askPhotoMenu = false
     askShowsDetails = false
     askCopied = false
     rebuildKeyboard()
   }
 
-  private static let askCameraKey = "askPendingCamera"
-  private func openAskCamera() {
-    let requestId = UUID().uuidString.lowercased()
-    UserDefaults.standard.set(
-      ["id": requestId, "at": Date().timeIntervalSince1970], forKey: Self.askCameraKey)
-    var link = URLComponents()
-    link.scheme = "hypaintelligence"
-    link.host = "ask-camera"
-    link.queryItems = [
-      URLQueryItem(name: "requestId", value: requestId),
-      URLQueryItem(name: "input", value: askInput),
-      URLQueryItem(name: "language", value: resolvedTtsLanguage().name),
-      URLQueryItem(name: "provider", value: settings.assistantProvider),
-      URLQueryItem(name: "model", value: settings.assistantModel),
-    ]
+  /// Keyboards can't use the camera, so this opens the pinned Keyboard chat in the Hypa
+  /// app with its camera. The photo and the Ask text land in that chat's input box.
+  private func openAskCamera(photos: Bool = false) {
+    askPhotoMenu = false
+    refreshAsk()
+    // A reply already named the Keyboard chat (as "Open in Hypa" uses); otherwise the app looks it up.
+    var link = URLComponents(
+      string: askTurn?.chatId.map { "hypaintelligence://chat/\($0)" } ?? "hypaintelligence://keyboard-chat")!
+    link.queryItems =
+      [URLQueryItem(name: "camera", value: String(Int(Date().timeIntervalSince1970 * 1000)))]
+      + (photos ? [URLQueryItem(name: "photos", value: "1")] : [])
+      + (askInput.isEmpty ? [] : [URLQueryItem(name: "draft", value: askInput)])
     guard let url = link.url else { return }
     openFirstAvailableHostURL([url][...])
   }
 
-  private func resumeAskCamera() {
-    guard let pending = UserDefaults.standard.dictionary(forKey: Self.askCameraKey) else { return }
-    UserDefaults.standard.removeObject(forKey: Self.askCameraKey)
-    guard hasFullAccess, let id = pending["id"] as? String,
-      Date().timeIntervalSince1970 - (pending["at"] as? Double ?? 0) < 30 * 60
-    else { return }
-    resetAsk()
-    featureMode = .ask
-    askTurn = AskTurn(requestId: id, fromCamera: true, activity: "Reading your photo…")
-    askTurn?.request = "Photo"
-    recoverAsk(askGeneration)
+  @objc private func focusAsk() {
+    guard !askFocused else { return }
+    askFocused = true
+    refreshAsk()
   }
 
   private func sendAskSuggestion(_ text: String) {
@@ -2514,11 +2701,10 @@ class KeyboardViewController: UIInputViewController {
   private func sendAsk(audio: Data? = nil) {
     let instruction = askInput.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !askNeedsFullAccess, audio != nil || !instruction.isEmpty else { return }
-    stopTts()
+    stopTtsKeepingClip()
     askGeneration += 1
     let generation = askGeneration
     askTurn = AskTurn(activity: "Working…")
-    askReplySuggestions = []
     askShowsDetails = false
     refreshAsk()
 
@@ -2548,6 +2734,7 @@ class KeyboardViewController: UIInputViewController {
         "model": self.settings.assistantModel,
         "surface": "keyboard",
         "language": self.resolvedTtsLanguage().name,
+        "timeZone": TimeZone.current.identifier,
       ]
       if !context.isEmpty { payload["context"] = context }
       // Signed in, the server keeps the thread; it rejects client history then.
@@ -2642,6 +2829,8 @@ class KeyboardViewController: UIInputViewController {
       askTurn?.steps[index].ok = event["ok"] as? Bool ?? false
     case "audio":
       if let url = event["url"] as? String, !url.isEmpty { askTurn?.audioURL = url }
+    case "image":
+      if let url = event["url"] as? String, !url.isEmpty { downloadAskPicture(url, generation: generation) }
     case "approval":
       askTurn?.approval = event
     case "done":
@@ -2650,6 +2839,9 @@ class KeyboardViewController: UIInputViewController {
       askTurn?.speak = event["speak"] as? Bool ?? false
       askTurn?.summary = event["summary"] as? String
       askTurn?.suggestions = (event["suggestions"] as? [String] ?? []).filter { !$0.isEmpty }
+      if let provider = event["provider"] as? String, let model = event["model"] as? String {
+        saveAssistantModel(provider: provider, model: model)
+      }
       if let turn = askTurn, !turn.request.isEmpty, !turn.text.isEmpty {
         askHistory += [
           ["role": "user", "content": turn.request], ["role": "assistant", "content": turn.text],
@@ -2691,13 +2883,6 @@ class KeyboardViewController: UIInputViewController {
     askTask = Task { [weak self] in
       while !Task.isCancelled {
         let reply = try? await URLSession.shared.data(for: request)
-        if (reply?.1 as? HTTPURLResponse)?.statusCode == 404, let self,
-          generation == self.askGeneration, self.askTurn?.fromCamera == true
-        {
-          self.askTurn?.retryable = false
-          self.failAsk(generation, "No photo sent", detail: nil)
-          return
-        }
         guard let (data, response) = reply,
           (response as? HTTPURLResponse)?.statusCode == 200,
           let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -2808,7 +2993,6 @@ class KeyboardViewController: UIInputViewController {
     isMutatingTranslationDocument = false
     isTraversingDocument = false
     lastTranslationState = state
-    suppressTranslationUndoHostSync()
     askTurn?.outcome = outcome
     playAskAudio()
     refreshAsk()
@@ -2816,7 +3000,7 @@ class KeyboardViewController: UIInputViewController {
 
   private func undoAsk() {
     guard askCanUndo else { return }
-    stopTts()
+    stopTtsKeepingClip()
     askTurn?.outcome = .restored
     undoTranslation()
     refreshAsk()
@@ -2861,6 +3045,53 @@ class KeyboardViewController: UIInputViewController {
       guard let self, self.askCopied else { return }
       self.askCopied = false
       self.refreshAsk()
+    }
+  }
+
+  private func downloadAskPicture(_ raw: String, generation: Int) {
+    guard let url = raw.hasPrefix("http") ? URL(string: raw) : apiURL(raw) else { return }
+    var request = URLRequest(url: url)
+    authorizeAsk(&request)
+    Task { [weak self] in
+      guard let (data, response) = try? await URLSession.shared.data(for: request),
+        (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty,
+        let self, generation == self.askGeneration
+      else { return }
+      self.askTurn?.picture = data
+      self.askTurn?.pictureURL = url
+      self.refreshAsk()
+    }
+  }
+
+  private func copyAskPicture() {
+    guard let data = askTurn?.picture, let image = UIImage(data: data) else { return }
+    UIPasteboard.general.image = image
+    askCopied = true
+    refreshAsk()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+      guard let self, self.askCopied else { return }
+      self.askCopied = false
+      self.refreshAsk()
+    }
+  }
+
+  private func makeAskPictureCopyButton() -> UIButton {
+    makeAskPill(askCopied ? "Copied" : "Copy") { [weak self] in self?.copyAskPicture() }
+  }
+
+  /// Keyboards can't add to the photo library, so Save opens the picture in the Hypa app, which can.
+  private func makeAskPictureSaveButton() -> UIButton {
+    makeAskPill("Save") { [weak self] in
+      guard let self, let picture = self.askTurn?.pictureURL else { return }
+      var link = URLComponents(
+        string: self.askTurn?.chatId.map { "hypaintelligence://chat/\($0)" } ?? "hypaintelligence://keyboard-chat")!
+      // Fully encoded, so a signed link's own "&" and "+" survive the trip.
+      link.percentEncodedQueryItems = [
+        URLQueryItem(
+          name: "photo", value: picture.absoluteString.addingPercentEncoding(withAllowedCharacters: .alphanumerics))
+      ]
+      guard let url = link.url else { return }
+      self.openFirstAvailableHostURL([url][...])
     }
   }
 
@@ -2937,7 +3168,7 @@ class KeyboardViewController: UIInputViewController {
 
   private func startAskRecording() {
     guard !isAskRecording, askTurn == nil else { return }
-    stopTts()
+    stopTtsKeepingClip()
     startAppMic(owner: "ask") { [weak self] in
       guard let self else { return }
       self.stopAskRecording(send: false)
@@ -2954,6 +3185,9 @@ class KeyboardViewController: UIInputViewController {
     askRecordingTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) {
       [weak self] _ in
       guard let self else { return }
+      if Date().timeIntervalSince(self.askRecordingStartedAt) >= Self.maxAppMicRecording {
+        return self.stopAskRecording(send: true)
+      }
       self.askRecordingLabel?.text = self.askRecordingElapsed()
     }
   }
@@ -2992,6 +3226,13 @@ class KeyboardViewController: UIInputViewController {
           })
       }
       return makeAskRow(icon: nil, title: "Ask Hypa", trailing: trailing, info: false)
+    }
+    if let error = toolbarErrors[.ask] {
+      let row = makeAskRow(icon: makeAskIcon("mic.slash"), title: error, trailing: [])
+      row.tag = ToolbarErrorSlot.ask.rawValue
+      row.addGestureRecognizer(
+        UITapGestureRecognizer(target: self, action: #selector(dismissToolbarErrorTap(_:))))
+      return row
     }
     if isAskRecording { return makeAskRecordingRow() }
     guard let turn = askTurn else { return makeAskPromptRow() }
@@ -3054,7 +3295,15 @@ class KeyboardViewController: UIInputViewController {
       return makeAskRow(
         icon: makeAskIcon(edited ? "checkmark" : "speaker.wave.2"),
         title: edited ? (outcome == .inserted ? "Inserted" : "Done") : "Audio ready",
-        trailing: undo + [play])
+        trailing: Array(undo.dropLast())
+          + [makeAskPill("Share") { [weak self] in self?.shareTtsAudio() }, reply, play])
+    }
+
+    if turn.picture != nil {
+      let line = turn.text.components(separatedBy: .newlines).first ?? turn.text
+      return makeAskRow(
+        icon: nil, title: line.isEmpty ? "Picture ready" : line,
+        trailing: [makeAskPictureCopyButton(), makeAskPictureSaveButton()] + undo)
     }
 
     switch outcome {
@@ -3138,8 +3387,13 @@ class KeyboardViewController: UIInputViewController {
     let camera = makeSearchCircleIconButton(
       image: sfSymbol("camera", size: 14, weight: .medium), background: settings.theme.key,
       tint: settings.theme.label
-    ) { [weak self] in self?.openAskCamera() }
-    camera.accessibilityLabel = "Take photo"
+    ) { [weak self] in
+      guard let self else { return }
+      self.askEditMenu = false
+      self.askPhotoMenu.toggle()
+      self.refreshAsk()
+    }
+    camera.accessibilityLabel = askPhotoMenu ? "Close photo options" : "Add a photo"
     header.addSubview(camera)
 
     let field = UIView()
@@ -3152,12 +3406,16 @@ class KeyboardViewController: UIInputViewController {
     text.translatesAutoresizingMaskIntoConstraints = false
     text.axis = .horizontal
     text.alignment = .center
-    text.spacing = 4
+    text.spacing = 1
     field.addSubview(text)
     let label = UILabel()
     label.font = .systemFont(ofSize: panelOptionFontSize)
     label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     let caret = makeBlinkingCaret()
+    caret.isHidden = !askFocused
+    field.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(focusAsk)))
+    field.addGestureRecognizer(
+      UILongPressGestureRecognizer(target: self, action: #selector(openAskEditMenu(_:))))
     if askInput.isEmpty {
       label.text = !askHistory.isEmpty ? "Reply to Hypa…" : "Tell Hypa what to do…"
       label.textColor = UIColor(hex: "#A1A1AA")
@@ -3207,10 +3465,16 @@ class KeyboardViewController: UIInputViewController {
       send.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -panelSideInset),
       send.centerYAnchor.constraint(equalTo: header.centerYAnchor),
     ])
-    // Hypa asked a question: offer its suggested answers until the user starts typing.
-    if askInput.isEmpty, !askReplySuggestions.isEmpty {
+    let pills: [(String, () -> Void)] =
+      askPhotoMenu
+      ? [
+        ("Camera", { [weak self] in self?.openAskCamera() }),
+        ("Photos", { [weak self] in self?.openAskCamera(photos: true) }),
+      ]
+      : askEditMenu ? askEditActions() : []
+    if !pills.isEmpty {
       field.isHidden = true
-      let strip = makeAskSuggestionStrip(askReplySuggestions)
+      let strip = makeAskPillStrip(pills)
       header.addSubview(strip)
       NSLayoutConstraint.activate([
         strip.leadingAnchor.constraint(equalTo: field.leadingAnchor),
@@ -3221,23 +3485,59 @@ class KeyboardViewController: UIInputViewController {
     return header
   }
 
-  private func makeAskSuggestionStrip(_ suggestions: [String]) -> UIScrollView {
+  private func askEditActions() -> [(String, () -> Void)] {
+    var actions: [(String, () -> Void)] = []
+    if hasFullAccess, UIPasteboard.general.hasStrings {
+      actions.append(("Paste", { [weak self] in self?.pasteIntoAsk() }))
+    }
+    if !askInput.isEmpty {
+      actions.append((askCopied ? "Copied" : "Copy", { [weak self] in self?.copyAskInput() }))
+    }
+    return actions
+  }
+
+  @objc private func openAskEditMenu(_ gesture: UILongPressGestureRecognizer) {
+    guard gesture.state == .began, !askEditActions().isEmpty else { return }
+    askEditMenu = true
+    refreshAsk()
+  }
+
+  private func pasteIntoAsk() {
+    askInput += UIPasteboard.general.string ?? ""
+    askFocused = true
+    askEditMenu = false
+    askPhotoMenu = false
+    refreshAsk()
+  }
+
+  private func copyAskInput() {
+    UIPasteboard.general.string = askInput
+    askCopied = true
+    refreshAsk()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+      guard let self, self.askCopied else { return }
+      self.askCopied = false
+      self.askEditMenu = false
+      self.refreshAsk()
+    }
+  }
+
+  private func makeAskPillStrip(_ pills: [(String, () -> Void)]) -> UIScrollView {
     let row = UIStackView()
     row.translatesAutoresizingMaskIntoConstraints = false
     row.axis = .horizontal
     row.spacing = 6
-    for suggestion in suggestions {
+    for (title, action) in pills {
       // Flat on purpose: key aesthetics add glass and a shadow that the strip clips.
       let pill = UIButton(type: .system)
       pill.backgroundColor = settings.theme.key
       pill.layer.cornerRadius = 15
-      pill.setTitle(suggestion, for: .normal)
+      pill.setTitle(title, for: .normal)
       pill.setTitleColor(settings.theme.label, for: .normal)
       pill.titleLabel?.font = .systemFont(ofSize: panelOptionFontSize, weight: .medium)
       pill.titleLabel?.lineBreakMode = .byTruncatingTail
       pill.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
-      pill.addAction(
-        UIAction { [weak self] _ in self?.sendAskSuggestion(suggestion) }, for: .touchUpInside)
+      pill.addAction(UIAction { _ in action() }, for: .touchUpInside)
       row.addArrangedSubview(pill)
     }
     let strip = UIScrollView()
@@ -3388,6 +3688,8 @@ class KeyboardViewController: UIInputViewController {
     let scroll = UIScrollView()
     scroll.translatesAutoresizingMaskIntoConstraints = false
     scroll.showsVerticalScrollIndicator = false
+    // A keyboard skips touches on clear areas, so drags in the gaps would not scroll (as in the tools menu).
+    scroll.backgroundColor = UIColor.black.withAlphaComponent(0.01)
     panel.addSubview(scroll)
     let stack = UIStackView()
     stack.translatesAutoresizingMaskIntoConstraints = false
@@ -3438,10 +3740,18 @@ class KeyboardViewController: UIInputViewController {
       stack.setCustomSpacing(4, after: body)
       stack.addArrangedSubview(note)
     }
+    if let data = turn?.picture, let image = UIImage(data: data) {
+      let picture = UIImageView(image: image)
+      picture.contentMode = .scaleAspectFit
+      picture.accessibilityLabel = "Picture from Hypa"
+      picture.heightAnchor.constraint(equalToConstant: 160).isActive = true
+      stack.addArrangedSubview(picture)
+    }
 
     if askWantsReply, let suggestions = turn?.suggestions, !suggestions.isEmpty {
       stack.setCustomSpacing(12, after: stack.arrangedSubviews.last!)
-      stack.addArrangedSubview(makeAskSuggestionStrip(suggestions))
+      stack.addArrangedSubview(
+        makeAskPillStrip(suggestions.map { text in (text, { [weak self] in self?.sendAskSuggestion(text) }) }))
     }
 
     // What actually happened, in plain words: tools that ran, where the text went, audio.
@@ -3485,7 +3795,12 @@ class KeyboardViewController: UIInputViewController {
     let actions = UIStackView()
     actions.axis = .horizontal
     actions.distribution = .equalSpacing
-    if turn?.text.isEmpty == false { actions.addArrangedSubview(makeAskCopyButton()) }
+    if turn?.picture != nil {
+      actions.addArrangedSubview(makeAskPictureCopyButton())
+      actions.addArrangedSubview(makeAskPictureSaveButton())
+    } else if turn?.text.isEmpty == false {
+      actions.addArrangedSubview(makeAskCopyButton())
+    }
     if turn?.outcome != nil {
       actions.addArrangedSubview(makeAskPill("Reply") { [weak self] in self?.replyToAsk() })
     }
@@ -3579,6 +3894,7 @@ class KeyboardViewController: UIInputViewController {
       btn.accessibilityLabel = "Looking up"
     } else {
       btn.setImage(iconImage(for: "mode-dictionary"), for: .normal)
+      btn.tintColor = settings.theme.label
       btn.imageView?.contentMode = .scaleAspectFit
       btn.contentEdgeInsets = UIEdgeInsets(top: 7, left: 7, bottom: 7, right: 7)
     }
@@ -4138,6 +4454,7 @@ class KeyboardViewController: UIInputViewController {
     case .textEditing: return featureMode == .textEditing
     case .languages: return featureMode == .keyboardLanguagePicker
     case .emoji: return featureMode == .emoji
+    case .lens: return false
     case .settings: return false
     }
   }
@@ -4232,6 +4549,13 @@ class KeyboardViewController: UIInputViewController {
       self.featureMode = .keyboard
       self.showToolbarError(.modeBar, KeyboardErrorCatalog.signInRequired)
     }
+  }
+
+  private func openLens() {
+    let candidates = [
+      "hypaintelligence://lens?use_agent=false",
+    ].compactMap(URL.init(string:))
+    openFirstAvailableHostURL(candidates[...])
   }
 
   private func openHostAppForSettings() {
@@ -6739,6 +7063,7 @@ class KeyboardViewController: UIInputViewController {
     learnCompletedWord()
     noteTypingForBlockCorrection(inserted.count)
     isApplyingKeyboardText = false
+    predictionAddedSpace = true
     scheduleContextRefresh()
   }
 
@@ -6790,8 +7115,34 @@ class KeyboardViewController: UIInputViewController {
     noteTypingForBlockCorrection(1)
   }
 
+  /// Names from Contacts are never corrected; text replacements from iOS Settings ("omw" → "On my way!")
+  /// are typed out when the word ends.
+  private func loadSupplementaryLexicon() {
+    requestSupplementaryLexicon { [weak self] lexicon in
+      guard let self else { return }
+      var words: [String] = []
+      var shortcuts: [String: String] = [:]
+      for entry in lexicon.entries {
+        if entry.userInput.caseInsensitiveCompare(entry.documentText) == .orderedSame {
+          words.append(entry.documentText)
+        } else {
+          shortcuts[entry.userInput.lowercased()] = entry.documentText
+          words.append(entry.userInput)
+        }
+      }
+      self.personalVocabulary.setDeviceWords(words)
+      DispatchQueue.main.async { self.textShortcuts = shortcuts }
+    }
+  }
+
   private func finishWordEnd(context: CursorContext) {
     let typed = context.previousWord
+    if let expansion = textShortcuts[typed.lowercased()],
+      replaceRecentlyTyped("\(typed) ", with: "\(expansion) ")
+    {
+      correctionLedger.recordWordCorrection(original: typed, replacement: expansion)
+      return
+    }
     let canCorrect =
       context.mode.allowsPrediction && !typed.isEmpty && settings.autocorrectEnabled
       && !correctionLedger.isRejected(typed)
@@ -6806,8 +7157,9 @@ class KeyboardViewController: UIInputViewController {
 
     let previousWord = wordContext.wordBeforePrevious
     let engine = autocorrectEngine
+    let taps = keyHost?.recentTaps ?? []
     correctionWorker.async { [weak self] in
-      let decision = engine.evaluate(word: word, previousWord: previousWord)
+      let decision = engine.evaluate(word: word, previousWord: previousWord, taps: taps)
       DispatchQueue.main.async {
         self?.applyWordEnd(decision, word: word, context: wordContext)
       }
@@ -6944,13 +7296,16 @@ class KeyboardViewController: UIInputViewController {
   }
 
   private let customIcons: [String: String] = [
-    "mode-mic": "ic_audio_mic",
+    "mode-mic": "ic_mode_transcribe",
     "mode-tts": "ic_mode_audio",
+    "mode-translate": "ic_mode_translate",
+    "mode-dictionary": "hypa_dictionary",
     "mode-languages": "ic_hypa_logo_mark",
     "emoji": "face.smiling",
     "mode-emoji": "face.smiling",
+    "mode-lens": "viewfinder",
     "mode-settings": "gearshape",
-    "mode-ask": "bubble.left",
+    "mode-ask": "ic_mode_ask",
   ]
 
   private func symCfg(_ pt: CGFloat = 17) -> UIImage.SymbolConfiguration {
@@ -6978,16 +7333,6 @@ class KeyboardViewController: UIInputViewController {
       if let i = UIImage(named: "ic_hypa_logo_mark") { return i.withRenderingMode(.alwaysTemplate) }
       if let i = UIImage(named: "hypa_icon") { return i.withRenderingMode(.alwaysTemplate) }
       return UIImage(systemName: "sparkles", withConfiguration: cfg)
-    case "mode-translate":
-      if let i = UIImage(named: "ic_mode_translate") {
-        return i.withRenderingMode(.alwaysOriginal)
-      }
-      return UIImage(systemName: "character.bubble", withConfiguration: cfg)
-    case "mode-dictionary":
-      if let i = UIImage(named: "hypa_dictionary") {
-        return i.withRenderingMode(.alwaysOriginal)
-      }
-      return UIImage(systemName: "book.closed", withConfiguration: cfg)
     case "mode-clipboard":
       return UIImage(systemName: "doc.on.clipboard", withConfiguration: cfg)
     case "mode-text-editing":
@@ -7010,6 +7355,8 @@ class KeyboardViewController: UIInputViewController {
     guard !isMutatingTranslationDocument else { return }
     let key = sender.keyName
     guard !key.isEmpty else { return }
+    let afterPrediction = predictionAddedSpace
+    predictionAddedSpace = false
     let boardKeys = ["alpha", "symbols", "symbols-basic", "symbols-extended", "shift", "next"]
     if capturesTyping && !(askCapturesKeys && boardKeys.contains(key)) {
       if key == "space" {
@@ -7026,6 +7373,7 @@ class KeyboardViewController: UIInputViewController {
           refreshShiftIcon()
         }
       }
+      if askCapturesKeys { updateAutoCaps() }
       return
     }
     switch key {
@@ -7069,8 +7417,17 @@ class KeyboardViewController: UIInputViewController {
       sender.committedText = inserted
       sender.committedConsumedShiftOnce = isLetter && shiftState == .once
       sender.committedConsumedAutoShift = isLetter && isAutoShifted
-      textDocumentProxy.insertText(inserted)
-      appendToLocalTextCache(inserted)
+      // A picked suggestion added a space; punctuation goes before it: "word ." becomes "word. ".
+      var typedText = inserted
+      if afterPrediction, Self.spaceSwapPunctuation.contains(inserted),
+        textBeforeCursorForDelete.hasSuffix(" ")
+      {
+        textDocumentProxy.deleteBackward()
+        removeFromLocalTextCache(count: 1)
+        typedText = inserted + " "
+      }
+      textDocumentProxy.insertText(typedText)
+      appendToLocalTextCache(typedText)
       toggleHitSlopOverlayIfTriggered()
       if isLetter && shiftState == .once { shiftState = .off }
       if isLetter { isAutoShifted = false }
@@ -7078,12 +7435,13 @@ class KeyboardViewController: UIInputViewController {
         refreshLetterTitles()
         refreshShiftIcon()
       }
-      noteTypingForBlockCorrection(inserted.count)
+      noteTypingForBlockCorrection(typedText.count)
     }
     scheduleContextRefresh()
   }
 
   private func backspaceDown() {
+    predictionAddedSpace = false
     if capturesTyping {
       deleteCapturedCharacter()
     } else {
@@ -7278,7 +7636,6 @@ class KeyboardViewController: UIInputViewController {
       !isMutatingTranslationDocument
     else { return false }
     correctionLedger.settle()
-    discardTranslationUndo()
     locallyTypedText = ""
     typedTail = ""
     pendingWordEnd = false
@@ -7362,16 +7719,42 @@ class KeyboardViewController: UIInputViewController {
 
   private func startDeleteRepeat() {
     deleteRepeatTimer?.invalidate()
+    var ticks = 0
     let timer = Timer(timeInterval: 0.065, repeats: true) { [weak self] _ in
-      if self?.capturesTyping == true {
-        self?.deleteCapturedCharacter()
+      guard let self else { return }
+      ticks += 1
+      // Like other keyboards: letters for about a second, then a whole word every few ticks.
+      let count: Int
+      if ticks <= Self.deleteLettersTicks {
+        count = 1
+      } else if ticks % Self.deleteWordEveryTicks == 0 {
+        count = max(1, Self.trailingWordLength(self.capturesTyping ? self.askInput : self.textBeforeCursorForDelete))
       } else {
-        self?.deleteOneCharacter(refreshUI: false)
+        return
+      }
+      for _ in 0..<count {
+        if self.capturesTyping {
+          self.deleteCapturedCharacter()
+        } else {
+          self.deleteOneCharacter(refreshUI: false)
+        }
       }
     }
     timer.tolerance = 0.01
     RunLoop.main.add(timer, forMode: .common)
     deleteRepeatTimer = timer
+  }
+
+  private static let deleteLettersTicks = 15
+  private static let deleteWordEveryTicks = 3
+
+  private var textBeforeCursorForDelete: String { textDocumentProxy.documentContextBeforeInput ?? "" }
+
+  /// The spaces before the cursor plus the word before them: what one word-delete removes.
+  static func trailingWordLength(_ text: String) -> Int {
+    let spaces = text.reversed().prefix { $0 == " " }.count
+    let word = text.dropLast(spaces).reversed().prefix { !$0.isWhitespace }.count
+    return spaces + word
   }
 
   private func stopDeleteRepeat(refreshUI: Bool) {
@@ -7385,6 +7768,7 @@ class KeyboardViewController: UIInputViewController {
 
   private func deleteOneCharacter(refreshUI: Bool) {
     guard !isMutatingTranslationDocument else { return }
+    keyHost?.clearTaps()
     discardTranslationUndo()
     let undidPeriod = hasUndoableAutoPeriod && undoAutoPeriod()
     if !undidPeriod {
@@ -8274,10 +8658,6 @@ class KeyboardViewController: UIInputViewController {
     updateUI()
   }
 
-  private func suppressTranslationUndoHostSync() {
-    suppressTranslationUndoHostSyncUntil = Date().timeIntervalSince1970 + 0.5
-  }
-
   private func isCurrentTranslationGeneration(_ generation: Int) -> Bool {
     generation == translationMutationGeneration
   }
@@ -8297,7 +8677,6 @@ class KeyboardViewController: UIInputViewController {
     isMutatingTranslationDocument = false
     isTraversingDocument = false
     lastTranslationState = state
-    suppressTranslationUndoHostSync()
     updateUI()
 
     if settings.autoSpeakTranslationsKeyboard {
@@ -9003,6 +9382,13 @@ class KeyboardViewController: UIInputViewController {
     }
   }
 
+  /** Stops playback but keeps the last clip, so Speak mode can still replay or share it, as on Android. */
+  private func stopTtsKeepingClip() {
+    let clip = ttsAudioData
+    stopTts()
+    ttsAudioData = clip
+  }
+
   private func stopTts() {
     let id = activeDictionarySpeechIdentifier
     ttsRequestGeneration += 1
@@ -9162,7 +9548,6 @@ class KeyboardViewController: UIInputViewController {
     let defaults = keyboardSharedDefaults(reason: "startAppMic").defaults
     if let url = appMicFileURL { try? FileManager.default.removeItem(at: url) }
     defaults.set(owner, forKey: Self.micOwnerKey)
-    defaults.set(Date().timeIntervalSince1970, forKey: Self.micStartedAtKey)
     if Date().timeIntervalSince1970 - defaults.double(forKey: Self.micHeartbeatKey) < 5 {
       postMicNotification(Self.micStartNotification)
       return
@@ -9178,14 +9563,17 @@ class KeyboardViewController: UIInputViewController {
 
   /// Stops the app's recording and hands back its 16 kHz mono PCM, or nil if the app never answered.
   private func stopAppMic(_ done: @escaping (Data?) -> Void) {
-    keyboardSharedDefaults(reason: "stopAppMic").defaults.removeObject(forKey: Self.micOwnerKey)
+    let defaults = keyboardSharedDefaults(reason: "stopAppMic").defaults
+    let live = Date().timeIntervalSince1970 - defaults.double(forKey: Self.micHeartbeatKey) < 5
+    defaults.removeObject(forKey: Self.micOwnerKey)
+    guard live else { return done(nil) }
     postMicNotification(Self.micStopNotification)
     waitForAppMicFile(attempts: 50, done)
   }
 
   private func cancelAppMic() {
     keyboardSharedDefaults(reason: "cancelAppMic").defaults.removeObject(forKey: Self.micOwnerKey)
-    postMicNotification(Self.micStopNotification)
+    postMicNotification(Self.micCancelNotification)
   }
 
   private func waitForAppMicFile(attempts: Int, _ done: @escaping (Data?) -> Void) {
@@ -9203,19 +9591,32 @@ class KeyboardViewController: UIInputViewController {
   /// (which recreates or resets this controller), so pick it up again.
   private func resumeAppMic() {
     let defaults = keyboardSharedDefaults(reason: "resumeAppMic").defaults
-    guard hasFullAccess, let owner = defaults.string(forKey: Self.micOwnerKey) else { return }
-    let startedAt = Date(timeIntervalSince1970: defaults.double(forKey: Self.micStartedAtKey))
-    // No fresh heartbeat means the app never started (or dropped) the recording.
-    let heartbeat = defaults.double(forKey: Self.micHeartbeatKey)
-    guard Date().timeIntervalSince(startedAt) < 5 * 60,
-      Date().timeIntervalSince1970 - heartbeat < 5
-    else {
-      return defaults.removeObject(forKey: Self.micOwnerKey)
+    let owner = defaults.string(forKey: Self.micOwnerKey)
+    let heartbeatFresh = Date().timeIntervalSince1970 - defaults.double(forKey: Self.micHeartbeatKey) < 5
+    guard hasFullAccess, let owner, heartbeatFresh else {
+      defaults.removeObject(forKey: Self.micOwnerKey)
+      // The screen can still say Listening if this same keyboard stayed alive
+      // while the app failed to start, or the user denied the mic. Leave
+      // isSttStarting alone: that flag means Stop is already waiting for the file.
+      let failedStt = isSttListening
+      let failedAsk = isAskRecording
+      guard failedStt || failedAsk else { return }
+      isSttListening = false
+      stopSttPulse()
+      isAskRecording = false
+      askRecordingTimer?.invalidate()
+      askRecordingTimer = nil
+      if failedStt { showToolbarError(.stt, KeyboardErrorCatalog.recordingFailed) }
+      // The app could not start the mic, for example during a call: say so instead of just stopping.
+      if failedAsk { showToolbarError(.ask, KeyboardErrorCatalog.micBusy) }
+      return
     }
+    // The 30s starts now, when the user can speak. The saved tap time is earlier,
+    // from before the trip to the app, and would end the take almost immediately.
     if owner == "ask" {
       resetAsk()
       featureMode = .ask
-      beginAskRecording(startedAt: startedAt)
+      beginAskRecording(startedAt: Date())
     } else {
       featureMode = .stt
       isSttListening = true
@@ -9243,10 +9644,11 @@ class KeyboardViewController: UIInputViewController {
     devLog("[STT] ✓ Transcript appended to field")
   }
 
-  private func startSttPulse() {
+  private func startSttPulse(startedAt: Date = Date()) {
     stopSttPulse()
     sttPulseTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-      _ = self
+      guard let self, Date().timeIntervalSince(startedAt) >= Self.maxAppMicRecording else { return }
+      self.stopSttRecording()
     }
   }
 
@@ -9346,6 +9748,27 @@ class KeyboardViewController: UIInputViewController {
       defaults.synchronize()
     }
     settings = settings.updating(voice: resolved)
+  }
+
+  /// The server answered with another model (e.g. a provider ran out of credit): the app's picker follows.
+  private func saveAssistantModel(provider: String, model: String) {
+    guard !provider.isEmpty, !model.isEmpty,
+      provider != settings.assistantProvider || model != settings.assistantModel
+    else { return }
+    let defaults = keyboardSharedDefaults(reason: "saveAssistantModel").defaults
+    let raw = defaults.string(forKey: prefsKey) ?? defaultSettingsJson()
+    guard let data = raw.data(using: .utf8),
+      var obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return }
+    obj["assistantProvider"] = provider
+    obj["assistantModel"] = model
+    if let updated = try? JSONSerialization.data(withJSONObject: obj),
+      let json = String(data: updated, encoding: .utf8)
+    {
+      defaults.set(json, forKey: prefsKey)
+      defaults.synchronize()
+    }
+    settings = settings.updating(assistantProvider: provider, assistantModel: model)
   }
 
   private func saveSharedLanguageSettings(

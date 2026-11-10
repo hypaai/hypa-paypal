@@ -43,6 +43,10 @@ struct SortedWordBytes {
     return lowerBound(needle + [UInt8.max]) - lowerBound(needle)
   }
 
+  func words(ofLength length: Int) -> [String] {
+    (0..<count).filter { starts[$0 + 1] - starts[$0] == length }.map { word(at: $0) }
+  }
+
   func shortestWithPrefix(_ prefix: String, want: Int, scanCap: Int) -> [String] {
     let needle = Array(prefix.utf8)
     guard !needle.isEmpty, want > 0, needle.allSatisfy({ $0 < 128 }) else { return [] }
@@ -203,6 +207,10 @@ final class LanguagePack {
     common?.countWithPrefix(prefix) ?? 0
   }
 
+  func commonOfLength(_ length: Int) -> [String] {
+    common?.words(ofLength: length) ?? []
+  }
+
   func canonical(_ normalized: String) -> String? {
     if let marked = accented[normalized] { return marked }
     return plain?.contains(normalized) == true ? normalized : nil
@@ -353,6 +361,10 @@ final class CorpusStore {
     snapshot().reduce(0) { $0 + $1.commonWithPrefix(normalized) }
   }
 
+  func commonOfLength(_ length: Int) -> [String] {
+    snapshot().flatMap { $0.commonOfLength(length) }
+  }
+
   func commonRank(_ normalized: String) -> Float {
     isCommon(normalized) ? 0.75 : 0.0
   }
@@ -427,7 +439,18 @@ final class PersonalVocabulary {
   func contains(_ word: String) -> Bool {
     lock.lock()
     defer { lock.unlock() }
-    return (counts[TextNormalizer.normalize(word)] ?? 0) >= Self.protectMinUses
+    let key = TextNormalizer.normalize(word)
+    return deviceWords.contains(key) || (counts[key] ?? 0) >= Self.protectMinUses
+  }
+
+  /// Names and shortcut words from the device (contacts, text replacements). Never corrected; not saved.
+  private var deviceWords: Set<String> = []
+
+  func setDeviceWords(_ words: [String]) {
+    let keys = Set(words.map(TextNormalizer.normalize).filter { !$0.isEmpty })
+    lock.lock()
+    deviceWords = keys
+    lock.unlock()
   }
 
   func usageWeight(_ word: String) -> Float {

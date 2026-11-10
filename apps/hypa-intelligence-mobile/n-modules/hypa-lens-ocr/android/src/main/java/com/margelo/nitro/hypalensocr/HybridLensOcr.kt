@@ -34,21 +34,20 @@ class HybridLensOcr : HybridLensOcrSpec() {
     try {
       val image = nativeFrame.image
       val rotation = image.imageInfo.rotationDegrees
-      val sideways = rotation % 180 != 0
-      val width = (if (sideways) image.height else image.width).toDouble()
-      val height = (if (sideways) image.width else image.height).toDouble()
+      val width = image.width.toDouble()
+      val height = image.height.toDouble()
 
       if (image.format != PixelFormat.RGBA_8888) {
         val mediaImage = image.image ?: throw Error("Frame does not have an underlying `Image`!")
         val text = Tasks.await(recognizer.process(InputImage.fromMediaImage(mediaImage, rotation)))
-        finish(toJson(text, width, height))
+        finish(toJson(text, width, height, rotation))
         return true
       }
 
       val input = InputImage.fromBitmap(image.toBitmap(), rotation)
       recognizer
         .process(input)
-        .addOnSuccessListener(executor) { text -> finish(toJson(text, width, height)) }
+        .addOnSuccessListener(executor) { text -> finish(toJson(text, width, height, rotation)) }
         .addOnFailureListener(executor) { finish("[]") }
       return true
     } catch (error: Throwable) {
@@ -93,7 +92,9 @@ class HybridLensOcr : HybridLensOcrSpec() {
     busy.set(false)
   }
 
-  private fun toJson(text: Text, width: Double, height: Double): String {
+  // ML Kit reports cornerPoints in the raw (unrotated) buffer, whatever rotation it was given.
+  // Rotate them to upright, normalized: rotation is the clockwise turn that makes the buffer upright.
+  private fun toJson(text: Text, width: Double, height: Double, rotation: Int): String {
     val lines = JSONArray()
     for (block in text.textBlocks) {
       for (line in block.lines) {
@@ -101,7 +102,14 @@ class HybridLensOcr : HybridLensOcrSpec() {
         if (points.size != 4) continue
         val corners = JSONArray()
         for (point in points) {
-          corners.put(point.x / width).put(point.y / height)
+          val x = point.x / width
+          val y = point.y / height
+          when (((rotation % 360) + 360) % 360) {
+            90 -> corners.put(1 - y).put(x)
+            180 -> corners.put(1 - x).put(1 - y)
+            270 -> corners.put(y).put(1 - x)
+            else -> corners.put(x).put(y)
+          }
         }
         lines.put(JSONObject().put("text", line.text).put("corners", corners))
       }

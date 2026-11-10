@@ -97,7 +97,7 @@ Then follow [step 10](#10-take-a-paypal-payment) (payments) and [step 11](#11-us
 | Component | Location | Purpose |
 | --- | --- | --- |
 | NestJS API | [`apps/hypa-api`](./apps/hypa-api) | Auth, agent, PayPal orders and webhooks, Hypa Bridge, local WhatsApp simulator |
-| Mobile app | [`apps/hypa-intelligence-mobile`](./apps/hypa-intelligence-mobile) | Expo app: agent chat, payment approval, Hypa Bridge screens |
+| Mobile app | [`apps/hypa-intelligence-mobile`](./apps/hypa-intelligence-mobile) | Expo app: agent chat, payment approval, Hypa Bridge (customer chat, push notifications), the Hypa keyboard (iOS and Android), Lens, translate and dictionary |
 | Web app | [`apps/hypa-intelligence`](./apps/hypa-intelligence) | Vite React app: chat, order approval page, PayPal return page |
 | PayPal adapter | [`packages/@hypa-paypal-agent`](./packages/@hypa-paypal-agent) | Open-source PayPal Orders v2 adapter with a credential-free demo |
 | Shared agent tools | [`packages/@hypa-intelligence-core`](./packages/@hypa-intelligence-core) | The one tool list used by the agent and `/v2/mcp` |
@@ -380,6 +380,8 @@ pnpm --filter @hypa/intelligence android    # Android Emulator
 
 For a real iPhone, open `apps/hypa-intelligence-mobile/ios` in Xcode and choose your own Apple development team for signing first.
 
+The app uses native modules (`expo-notifications`, `react-native-keyboard-controller`, the Hypa keyboard), so use a development build, not Expo Go. After pulling new changes, run `pnpm install`, then `pod install` in `apps/hypa-intelligence-mobile/ios` and rebuild. Add `EXPO_PUBLIC_POSTHOG_KEY` to `.env` only if you want usage analytics; empty turns it off.
+
 Sign in with the account from step 6 (or create one in the app). If a build fails with generated-code errors, run `pnpm --filter @hypa/intelligence generate:nitro` and rebuild.
 
 **Check it worked:** the app opens, you are signed in, and a chat message gets an answer.
@@ -409,7 +411,7 @@ Hypa Bridge lets a small business answer WhatsApp customers with an assistant th
 - With **Answer simple questions automatically** off, every reply is a **draft** the owner sends, edits or discards in the app. With it on, simple answers go out directly; orders, hand-offs and unlisted prices always wait for the owner.
 - The owner can reply by hand (**Write a reply**), which pauses the assistant, then tap **Hand back** to let it continue.
 - WhatsApp only allows free-form messages within 24 hours of the customer's last message. After that, sending a draft uses an approved message template (`WHATSAPP_QUOTE_TEMPLATE`, default `quote_ready`).
-- An order the assistant records becomes a draft PayPal order and appears as an approval card in the customer's thread. The customer is told the business is confirming. Nothing payable is sent until the owner approves it; then the customer gets the PayPal link in their language (amount, currency and URL unchanged), and a receipt once PayPal's webhook marks it paid. A repeated WhatsApp message makes one order and a repeated webhook sends one receipt. Outside the 24-hour window the approved templates `invoice_ready` and `payment_received` are used (`WHATSAPP_PAYMENT_LINK_TEMPLATE`, `WHATSAPP_PAYMENT_RECEIPT_TEMPLATE`; `WHATSAPP_TEMPLATE_LANGUAGES` lists the languages they are approved in, English otherwise). PayPal does not support NGN, GHS or XOF, so a business in those currencies arranges payment itself; use USD, EUR or GBP for the demo.
+- An order the assistant records becomes a draft PayPal order and appears as an approval card in the customer's chat (Bridge's Chat tab); reopen it from the card if you closed it, and use **Send payment link to customer** to send it again. The customer is told the business is confirming. Nothing payable is sent until the owner approves it; then the customer gets the PayPal link in their language (amount, currency and URL unchanged), and a receipt once PayPal's webhook marks it paid. A repeated WhatsApp message makes one order and a repeated webhook sends one receipt. Outside the 24-hour window the approved templates `invoice_ready` and `payment_received` are used (`WHATSAPP_PAYMENT_LINK_TEMPLATE`, `WHATSAPP_PAYMENT_RECEIPT_TEMPLATE`; `WHATSAPP_TEMPLATE_LANGUAGES` lists the languages they are approved in, English otherwise). PayPal does not support NGN, GHS or XOF, so a business in those currencies arranges payment itself; use USD, EUR or GBP for the demo.
 - Replies are billed to the owner's wallet. If it runs low, the assistant pauses and the app shows an alert.
 
 ### Step by step
@@ -484,6 +486,10 @@ what is your return policy?
 Expected: a price quote taken from your list; an order recorded for two with the due date; and the last question handed to you as an owner request, because a return policy is not in the profile.
 
 **Check it worked:** the order card shows 2 × agbada with a due date, and the third message is flagged for you.
+
+### Push notifications
+
+The app sends its Expo push token to `POST /v2/push/token` (`push_token`) once a business has a number. `PushService` tells the owner when a draft or an order waits for approval and when a customer has paid. A failed push is logged and never stops the reply. It needs a development build with `expo-notifications`, and push credentials (APNs, FCM) set in EAS for a real device; the simulator does not send pushes. Run `pnpm install` and `prisma db push` to pick up the new dependency and table.
 
 ## Connect a real WhatsApp number
 
@@ -573,6 +579,8 @@ cd apps/hypa-intelligence-mobile && node --import tsx --test lib/bridge.test.ts
 **Voice notes fail.** Install `ffmpeg` and make sure it is on your PATH.
 
 **The assistant stopped answering and the app shows an alert.** The wallet is low (`low_balance`), or the business profile is incomplete (`profile_incomplete`). Fix the cause; the next message resumes.
+
+**No push notification arrives.** Use a physical device with a development build, sign in, and connect a number (the token is sent then). A phone that was signed out keeps its old token until another account registers it.
 
 **Native build or generated-code errors.** Run `pnpm install` and `pnpm --filter @hypa/intelligence generate:nitro`, then rebuild the app.
 

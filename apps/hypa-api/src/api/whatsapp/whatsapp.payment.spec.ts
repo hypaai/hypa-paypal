@@ -29,7 +29,8 @@ function setup(options: { claim?: number; status?: string; inbound?: Date; langu
   const tools = { forCaller: jest.fn().mockReturnValue({}) };
   const billing = { findOrCreateUserApiKey: jest.fn().mockResolvedValue({ id: 'key-1' }) };
   const events = { on: jest.fn() };
-  return { service: new WhatsappPaymentService(db as never, tools as never, billing as never, events as never), db, tools, events };
+  const push = { notify: jest.fn().mockResolvedValue(undefined) };
+  return { service: new WhatsappPaymentService(db as never, tools as never, billing as never, push as never, events as never), db, tools, events, push };
 }
 
 beforeEach(() => {
@@ -122,6 +123,12 @@ describe('the receipt', () => {
     const { service } = setup({ status: 'paid', language: 'fr' });
     await service.sendReceipt('order-1');
     expect(clientMock.sendText).toHaveBeenCalledWith('pn-1', '2348000000001', 'Paiement réussi: USD 95.50');
+  });
+
+  it('tells the merchant the customer has paid, once the receipt is out', async () => {
+    const { service, push } = setup({ status: 'paid' });
+    await service.sendReceipt('order-1');
+    expect(push.notify).toHaveBeenCalledWith('owner-1', { title: 'Payment received', body: 'Ada has paid USD 95.50', data: { threadId: 'thread-1' } });
   });
 
   it('is not sent for an order that is not paid', async () => {

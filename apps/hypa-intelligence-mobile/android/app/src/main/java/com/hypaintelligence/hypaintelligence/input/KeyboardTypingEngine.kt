@@ -27,6 +27,8 @@ enum class ShiftState {
 
 fun insertsNewline(info: EditorInfo): Boolean {
   if (info.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION != 0) return true
+  val action = info.imeOptions and EditorInfo.IME_MASK_ACTION
+  if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) return false
   if (info.inputType and InputType.TYPE_MASK_CLASS != InputType.TYPE_CLASS_TEXT) return false
   return info.inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE != 0 ||
     info.inputType and InputType.TYPE_TEXT_FLAG_IME_MULTI_LINE != 0
@@ -167,8 +169,8 @@ class KeyboardTypingEngine {
 
   fun isUppercaseActive(): Boolean = shiftState() != ShiftState.OFF
 
-  fun updateAutoCaps(textBeforeCursor: String): Boolean {
-    val wanted = capMode.appliesAt(textBeforeCursor)
+  fun updateAutoCaps(textBeforeCursor: String, mode: AutoCapMode = capMode): Boolean {
+    val wanted = mode.appliesAt(textBeforeCursor)
     if (!wanted) autoShiftDismissed = false
     val next = wanted && !autoShiftDismissed && !shiftLocked && !shiftOnce
     if (autoShift == next) {

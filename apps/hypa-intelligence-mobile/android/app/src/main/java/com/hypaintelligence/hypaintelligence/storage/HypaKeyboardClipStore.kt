@@ -115,7 +115,8 @@ internal object HypaKeyboardClipStore {
       val clip = clipboard?.primaryClip ?: return null
       if (clip.itemCount == 0) return null
       if (clip.description?.extras?.getBoolean(ClipDescription.EXTRA_IS_SENSITIVE) == true) return null
-      clip.getItemAt(0)?.coerceToText(context)?.toString()?.takeIf { it.isNotEmpty() }
+      // A copied picture is only a URI; keep it out of text clip history.
+      clip.getItemAt(0)?.takeIf { it.text != null || it.uri == null }?.coerceToText(context)?.toString()?.takeIf { it.isNotEmpty() }
     }.getOrNull()
 
   private fun prefs(context: Context): SharedPreferences =

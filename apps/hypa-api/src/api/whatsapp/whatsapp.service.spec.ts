@@ -82,8 +82,9 @@ function setup(options: { numberRow?: Partial<typeof number> | null; threadRow?:
     }),
   };
   const media = { get: jest.fn().mockResolvedValue(Buffer.from('audio')) };
-  const service = new WhatsappService(db as never, agent as never, media as never);
-  return { service, db, agent, media };
+  const push = { notify: jest.fn().mockResolvedValue(undefined) };
+  const service = new WhatsappService(db as never, agent as never, media as never, push as never);
+  return { service, db, agent, media, push };
 }
 
 beforeEach(() => {
@@ -140,10 +141,11 @@ describe('handle: text', () => {
   });
 
   it('leaves the reply as a draft for the owner by default and sends nothing', async () => {
-    const { service, db } = setup();
+    const { service, db, push } = setup();
     await service.handle(text());
     expect(db.whatsapp_draft.create).toHaveBeenCalledWith({ data: expect.objectContaining({ threadId: 'thread-1', text: 'Mo ti gba, ẹ ṣé.', needs_owner: false, price_warning: false }) });
     expect(clientMock.sendText).not.toHaveBeenCalled();
+    expect(push.notify).toHaveBeenCalledWith('owner-1', expect.objectContaining({ body: 'A reply is waiting for your approval', data: { threadId: 'thread-1' } }));
   });
 
   it('ignores a message for a number that is not connected', async () => {
@@ -229,9 +231,10 @@ describe('orders and prices', () => {
 
 describe('auto-reply', () => {
   it('sends a simple answer straight away when the owner turned auto-reply on', async () => {
-    const { service } = setup({ numberRow: { auto_reply: true }, events: [done('We open 9am to 6pm. Agbada is ₦45,000.')] });
+    const { service, push } = setup({ numberRow: { auto_reply: true }, events: [done('We open 9am to 6pm. Agbada is ₦45,000.')] });
     await service.handle(text());
     expect(clientMock.sendText).toHaveBeenCalledWith('pn-1', '2348000000001', 'We open 9am to 6pm. Agbada is ₦45,000.');
+    expect(push.notify).not.toHaveBeenCalled();
   });
 });
 

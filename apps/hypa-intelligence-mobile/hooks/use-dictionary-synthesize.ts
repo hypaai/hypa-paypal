@@ -21,6 +21,7 @@ export function useDictionarySynthesize(kind: 'input' | 'output' = 'output') {
     try {
       playerRef.current?.pause?.()
       playerRef.current?.remove?.()
+      playerRef.current?.release?.()
     } catch {}
 
     playerRef.current = null

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Share, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftRight, Clock3, UserRound } from 'lucide-react-native';
+import { ArrowLeftRight, History, UserRound } from 'lucide-react-native';
 import { createAudioPlayer } from 'expo-audio';
 import * as Clipboard from 'expo-clipboard';
 
@@ -246,6 +246,7 @@ const Entry = () => {
     try {
       ttsPlayerRef.current?.pause();
       ttsPlayerRef.current?.remove();
+      ttsPlayerRef.current?.release?.();
     } catch {}
     ttsPlayerRef.current = null;
     setActiveTtsPanel(null);
@@ -277,6 +278,7 @@ const Entry = () => {
         try {
           player.pause?.();
           player.remove?.();
+          player.release?.();
         } catch {}
         return;
       }
@@ -297,6 +299,7 @@ const Entry = () => {
         try {
           player.pause?.();
           player.remove?.();
+          player.release?.();
         } catch {}
         return;
       }
@@ -861,7 +864,7 @@ const Entry = () => {
                   params: withReturnTo('/(dashboard)/translate'),
                 } as any)
               }>
-              <Clock3 size={20} color={colors.icon} />
+              <History size={20} color={colors.icon} />
             </GlassIconButton>
             <Text style={{ fontSize: 22, fontFamily: FONTS.main.medium, color: text }}>Translate</Text>
             <GlassIconButton

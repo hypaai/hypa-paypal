@@ -8,6 +8,7 @@ import { decryptString, encryptString } from 'src/utils/encryption.utils';
 import { Prisma } from 'src/generated/prisma/client';
 import { AgentMediaService } from '../agent/agent.media';
 import { AgentService } from '../agent/agent.service';
+import { PushService } from '../push/push.service';
 import { businessProfileSchema, hoursText, unlistedAmounts, type BusinessProfile } from './bridge.profile';
 import { bridgeTools, type RecordedOrder } from './bridge.tools';
 import { convertAudio } from './whatsapp.audio';
@@ -74,6 +75,7 @@ export class WhatsappService {
     private readonly db: DbService,
     private readonly agent: AgentService,
     private readonly media: AgentMediaService,
+    private readonly push: PushService,
   ) {}
 
   /** Keeps the messages not seen before. Meta can deliver the same message twice, and a duplicate must run once. */
@@ -180,8 +182,19 @@ export class WhatsappService {
     // Quotes, orders, anything the agent could not answer, and any price off the list wait for the owner.
     const simple = !order && handoff === undefined && !priceWarning;
     // A failed send leaves the draft for the owner; throwing here would retry the job and draft the reply again.
+    let delivered = false;
     if (number.auto_reply && simple) {
-      await this.deliver(number, thread, draft).catch((error: Error) => this.logger.warn(`An automatic WhatsApp reply was not sent: ${error.message}`));
+      delivered = await this.deliver(number, thread, draft).then(() => true, (error: Error) => {
+        this.logger.warn(`An automatic WhatsApp reply was not sent: ${error.message}`);
+        return false;
+      });
+    }
+    if (!delivered) {
+      await this.push.notify(number.userId, {
+        title: thread.customer_name ?? 'WhatsApp customer',
+        body: handoff ?? (order ? 'New order waiting for your approval' : 'A reply is waiting for your approval'),
+        data: { threadId: thread.id },
+      });
     }
   }
 

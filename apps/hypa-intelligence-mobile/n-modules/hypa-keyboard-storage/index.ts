@@ -6,6 +6,7 @@ export {
   drainDebugEvents,
   getSettingsJson,
   getSharedStoreJson,
+  savePicture,
   setSettingsJson,
   setSharedStoreJson,
   startKeyboardMic,

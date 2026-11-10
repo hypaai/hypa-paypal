@@ -12,12 +12,13 @@ import { readConversation, type ChatImage, type ChatMessage } from '@/api/conver
 import { useSettings } from '@/context/settings-context';
 import { useUser } from '@/lib/user-provider';
 import { runChatTurn } from '@/lib/chat-turn';
+import { isAssistantModel } from '@hypa/config/models';
 
 interface PendingTurn { requestId: string; chatId?: string }
 const pendingKey = (userId: string) => `hypa-agent-pending:${userId}`;
 
 export function useAgentChat(initialChatId?: string, resetKey?: string) {
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const { user } = useUser();
   const token = settings?.token?.trim() || undefined;
   const userId: string | undefined = token ? user?.id : undefined;
@@ -129,8 +130,13 @@ export function useAgentChat(initialChatId?: string, resetKey?: string) {
       attachments: images.length ? images.map((image) => ({ data: image.data!, mime: image.mime })) : undefined,
       ...(audio ? {
         audio, audioType: 'base64' as const,
-        // "auto" isn't a model; without `asr` the API picks one.
-        ...(settings?.sttProvider && settings?.sttModel && settings.sttModel !== 'auto' ? { asr:{ provider: settings.sttProvider, model: settings.sttModel } } : {}),
+        asr:
+          settings?.sttProvider &&
+          settings.sttProvider !== 'auto' &&
+          settings?.sttModel &&
+          settings.sttModel !== 'auto'
+            ? { provider: settings.sttProvider, model: settings.sttModel }
+            : { provider: 'auto', model: 'auto' },
       } : {}),
     };
     let reply: ChatMessage = { id, role: 'assistant', content: '', status: 'pending', requestId };
@@ -146,6 +152,11 @@ export function useAgentChat(initialChatId?: string, resetKey?: string) {
         if (event.type === 'transcript') {
           setMessages((rows) => rows.map((row) => row.id === `user-${requestId}` ? { ...row, content: event.text } : row));
           return;
+        }
+        // The server switched models (e.g. a provider ran out of credit): the picker, shared with the keyboard, follows.
+        if (event.type === 'done' && event.provider && event.model && isAssistantModel(event.provider, event.model) &&
+          (event.provider !== body.provider || event.model !== body.model)) {
+          void updateSettings({ assistantProvider: event.provider, assistantModel: event.model });
         }
         reply = { ...reply, ...applyAgentEvent(reply, event) };
         setMessages((rows) => rows.map((row) => row.id === id ? reply : row));
@@ -170,7 +181,7 @@ export function useAgentChat(initialChatId?: string, resetKey?: string) {
     } finally {
       if (epoch === generation.current) { submitting.current = false; setBusy(false); }
     }
-  }, [connection, token, pending, settings?.assistantProvider, settings?.assistantModel, settings?.sttProvider, settings?.sttModel, userId, finishPending, invalidateHistory]);
+  }, [connection, token, pending, settings?.assistantProvider, settings?.assistantModel, settings?.sttProvider, settings?.sttModel, updateSettings, userId, finishPending, invalidateHistory]);
 
   const regenerate = useCallback(async (messageId: string) => {
     const index = messages.findIndex((row) => row.id === messageId);

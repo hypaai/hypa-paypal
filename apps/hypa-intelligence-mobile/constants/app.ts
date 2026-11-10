@@ -78,11 +78,6 @@ export const DEFAULT_TTS_MODEL = resolveDefaultModelNameFromProviderMap(
   DEFAULT_MODEL_PROVIDER
 );
 
-export const DEFAULT_STT_MODEL = resolveDefaultModelNameFromProviderMap(
-  modelsAny.ASR,
-  DEFAULT_MODEL_PROVIDER
-);
-
 type ModelEntry = { name: string; displayName: string; default?: boolean };
 type ProviderMap = Record<string, ModelEntry[]>;
 
@@ -116,16 +111,30 @@ export const PROVIDERS = allProviderNames.map((name) => ({
   displayName: PROVIDER_DISPLAY[name] ?? name,
 }));
 
-export const ALL_LLM_MODELS: ProviderMap = Object.fromEntries(
-  Object.entries(modelsConfig.MT ?? {}).map(([provider, models]) => [
-    provider,
-    (models as any[]).map((m) => ({
-      name: m.name,
-      displayName: m.displayName,
-      default: m.default,
+export const AUTO_TRANSLATION_PROVIDER = {
+  name: 'auto',
+  displayName: 'Auto',
+};
+
+export const ALL_LLM_MODELS: ProviderMap = {
+  ...Object.fromEntries(
+    Object.entries(modelsConfig.MT ?? {}).map(([provider, models]) => [
+      provider,
+      (models as any[]).map((m) => ({
+        name: m.name,
+        displayName: m.displayName,
+        default: m.default,
+      })),
+    ])
+  ),
+  auto: ((modelsConfig.MT?.hypaai ?? []) as any[])
+    .filter((model) => model.name === 'auto')
+    .map((model) => ({
+      name: model.name,
+      displayName: model.displayName,
+      default: model.default,
     })),
-  ])
-);
+};
 
 export const ALL_DICTIONARY_MODELS: ProviderMap = Object.fromEntries(
   Object.entries(modelsConfig.AC ?? {}).map(([provider, models]) => [

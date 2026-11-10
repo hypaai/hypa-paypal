@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -55,7 +56,7 @@ export default function BridgeSetup() {
   const finish = async (message: string) => {
     await queryClient.invalidateQueries({ queryKey: bridgeKeys.number });
     toast.showSuccess(message);
-    goBackOrReturnTo(undefined, '/bridge');
+    goBackOrReturnTo(undefined, '/settings');
   };
 
   const save = useMutation({
@@ -86,7 +87,7 @@ export default function BridgeSetup() {
     <Body showBackground={false} enableScroll={false} hideHorizontalInset hideBottomInset={process.env.EXPO_OS !== 'ios'}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={process.env.EXPO_OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={insets.top}>
         <View className="flex-row items-center justify-between px-4 py-2">
-          <BackButton onPress={() => goBackOrReturnTo(undefined, '/bridge')} />
+          <BackButton onPress={() => goBackOrReturnTo(undefined, '/settings')} />
           <Text className="text-[17px] text-zinc-900 dark:text-zinc-50" style={{ fontFamily: FONTS.main.semiBold }}>
             Hypa Bridge
           </Text>

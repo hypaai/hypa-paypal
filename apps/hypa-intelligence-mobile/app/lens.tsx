@@ -1,7 +1,7 @@
 import { useIsFocused } from '@react-navigation/native';
 import { isAxiosError } from 'axios';
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Eraser, Flashlight, FlashlightOff, Pause, Play, Square, Volume2, X } from 'lucide-react-native';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -25,6 +25,7 @@ import { StickyOverlay } from '@/lib/lens/sticky-overlay';
 import { PageBlocks, type PageBlock } from '@/lib/lens/page-blocks';
 import { fitText, sharedFont } from '@/lib/lens/fit-text';
 import { languageNameToCode } from '@/lib/model-languages';
+import { goBackOrReturnTo } from '@/lib/navigation';
 import { synthesizeSpeech, translateLensLine } from '@/lib/product-api';
 import { useToast } from '@/lib/toast';
 
@@ -71,6 +72,8 @@ export default function LensScreen() {
   const device = useCameraDevice('back');
   const camera = useRef<CameraRef>(null);
   const { languages, models, settings, resolvePlaybackVoice, targetLanguageVoices } = useSettings();
+  // From Chat, signed-out users get the plain translator instead of the AI.
+  const signedOutAgent = use_agent !== 'false' && !settings?.token?.trim();
   const targetLanguages = useTranslationTargetLanguagePresets();
 
   const [targetLang, setTargetLang] = useState(languages.targetLang || targetLanguages[0]?.name || 'French');
@@ -388,7 +391,7 @@ export default function LensScreen() {
 
   const close = useCallback(() => {
     stopSpeech();
-    router.back();
+    goBackOrReturnTo('/');
   }, [stopSpeech]);
 
   if (!hasPermission) {
@@ -443,6 +446,7 @@ export default function LensScreen() {
         outputs={[frameOutput]}
         torchMode={torch ? 'on' : 'off'}
         resizeMode="cover"
+        enableNativeZoomGesture
       />
       <LensOverlay cards={overlay} motion={motion} motionToView={motionToView} onFastChange={setFast} />
 
@@ -468,9 +472,9 @@ export default function LensScreen() {
         )}
       </View>
 
-      {status ? (
+      {status || signedOutAgent ? (
         <View style={[styles.status, { top: insets.top + 72 }]}>
-          <Text style={styles.statusText}>{status}</Text>
+          <Text style={styles.statusText}>{status || 'Sign in for AI translation'}</Text>
         </View>
       ) : null}
 
@@ -516,6 +520,7 @@ function RoundButton({
       accessibilityLabel={label}
       onPress={onPress}
       disabled={disabled}
+      hitSlop={16}
       style={[styles.roundButton, disabled && styles.disabled]}
     >
       {children}

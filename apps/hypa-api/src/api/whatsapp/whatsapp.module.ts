@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { DEFAULT_JOB_OPTIONS, QUEUE_NAMES } from 'src/queues/queue.constants';
 import { AgentModule } from '../agent/agent.module';
 import { CommerceModule } from '../commerce/commerce.module';
+import { PushModule } from '../push/push.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { WhatsappOwnerController } from './whatsapp.owner.controller';
 import { WhatsappOwnerService } from './whatsapp.owner.service';
@@ -15,6 +16,7 @@ import { WhatsappWebhookController } from './whatsapp.webhook.controller';
   imports: [
     AgentModule,
     CommerceModule,
+    PushModule,
     WebhooksModule,
     BullModule.registerQueue({
       name: QUEUE_NAMES.WHATSAPP_QUEUE,
