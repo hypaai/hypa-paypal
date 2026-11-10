@@ -52,3 +52,6 @@ export const User = asIcon(L.User);
 export const Users = asIcon(L.Users);
 export const Volume2 = asIcon(L.Volume2);
 export const X = asIcon(L.X);
+export const Copy = asIcon(L.Copy);
+export const Share2 = asIcon(L.Share2);
+export const Minus = asIcon(L.Minus);

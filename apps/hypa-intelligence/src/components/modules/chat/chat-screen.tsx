@@ -18,6 +18,7 @@ import { CHAT_FILE_LIMIT } from "@hypa/config/chat-attachments";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useStickToBottom } from "use-stick-to-bottom";
+import { isPayPalUrl } from "@hypa/intelligence-core/payment-link";
 
 import { useAgentChat, type ChatTurn } from "./use-agent-chat";
 import { AttachmentCard, AttachmentRow } from "./attachment-cards";
@@ -44,6 +45,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAudioRecording } from "@/hooks/use-audio-recording";
 import { usePageEnter } from "@/hooks/use-page-enter";
+import { PaymentLinkChip } from "@/components/modules/commerce/payment-link-chip";
+import { approvalOrderId } from "@/lib/order-approval";
+import { useOrderApprovalStore } from "@/lib/order-approval-store";
 
 /** The Intelligence assistant default (app-level, not the catalog's global AC default). */
 const DEFAULT_ASSISTANT = "meta/muse-spark-1.3";
@@ -65,11 +69,31 @@ const MARKDOWN: Components = {
   strong: ({ children }) => (
     <strong className="font-semibold">{children}</strong>
   ),
-  a: ({ children, href }) => (
-    <a className="underline" href={href} rel="noreferrer" target="_blank">
-      {children}
-    </a>
-  ),
+  a: ({ children, href }) => {
+    // A checkout link belongs to the customer. Opening it would put the
+    // merchant in their own customer's checkout, so it is handed over instead.
+    if (href && isPayPalUrl(href)) return <PaymentLinkChip url={href} />;
+    // An approval link belongs to this app, so it opens the approval here.
+    const orderId = approvalOrderId(href);
+
+    if (orderId) {
+      return (
+        <button
+          className="inline-block max-w-full rounded-full bg-primary/10 px-3 py-1 align-middle text-sm font-medium text-primary transition-colors hover:bg-primary/20"
+          type="button"
+          onClick={() => useOrderApprovalStore.getState().open(orderId)}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    return (
+      <a className="underline" href={href} rel="noreferrer" target="_blank">
+        {children}
+      </a>
+    );
+  },
   code: ({ children }) => (
     <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-[0.85em]">
       {children}

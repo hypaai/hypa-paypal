@@ -2,6 +2,7 @@
 import axios from "axios";
 import { ANALYTICS, analyticsHeaders } from "@hypa/config/analytics";
 import { analytics } from "@/lib/analytics";
+import { merchantToken } from "@/lib/merchant-auth";
 import {
   TRANSLATE_ENDPOINTS,
   bookmarkEndpoint,
@@ -44,18 +45,23 @@ const BASE_URL = import.meta.env.VITE_PUBLIC_API_URL || import.meta.env.VITE_HYP
 // Tells the API which product and surface this traffic comes from.
 const attribution = analyticsHeaders("hypa-intelligence", __APP_VERSION__);
 
+/** API origin, for callers that use fetch directly (the payment link goes through /v2/mcp). */
+export const getApiBaseURL = () => BASE_URL;
+
 export const api = axios.create({
   baseURL: BASE_URL,
   headers: attribution,
   timeout: 70000,
 });
 
-/** `/v2/agent` connection for the Chat tab. Nobody signs in here, so it is anonymous. */
+/** `/v2/agent` connection for the Chat tab. Anonymous, unless a merchant signed in to take payments. */
 export const agentConnection = () => {
   const anonId = analytics.anonId();
+  const token = merchantToken();
 
   return {
     baseUrl: BASE_URL,
+    ...(token ? { token } : {}),
     headers: {
       ...attribution,
       ...(anonId ? { [ANALYTICS.headers.anonId]: anonId } : {}),
@@ -63,11 +69,13 @@ export const agentConnection = () => {
   };
 };
 
-// Nobody signs in here, so every request is attributed to the device.
+// Requests are attributed to the device; a signed-in merchant also sends their login.
 api.interceptors.request.use((config) => {
   const anonId = analytics.anonId();
+  const token = merchantToken();
 
   if (anonId) config.headers[ANALYTICS.headers.anonId] = anonId;
+  if (token && !config.headers.Authorization) config.headers.Authorization = `Bearer ${token}`;
 
   return config;
 });

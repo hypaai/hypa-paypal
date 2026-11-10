@@ -76,6 +76,9 @@ export function useAgentChat(initialChatId?: string, resetKey?: string) {
       if (status.status === 'failed') throw new AgentStreamError('The request failed. You can send a new message.', 422);
       chatId.current = status.chatId ?? turn.chatId ?? chatId.current;
       setMessages((rows) => rows.map((row) => row.id === id ? { ...row, content: status.message, status: 'success', activity: undefined, audioUrl: status.audioUrl } : row));
+      if (status.approval) {
+        setMessages((rows) => rows.map((row) => row.id === id ? { ...row, approval: { ...status.approval!, status: 'draft' } } : row));
+      }
       await finishPending();
       if (epoch !== generation.current) return;
       setPending(null);

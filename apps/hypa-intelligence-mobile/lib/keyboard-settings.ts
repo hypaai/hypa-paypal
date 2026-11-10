@@ -306,3 +306,12 @@ export async function saveKeyboardSettings(settings: KeyboardSettings): Promise<
   const stored = parseKeyboardSettings(getSettingsJson());
   await setSettingsJson(stringifyKeyboardSettings({ ...settings, toolOrder: stored.toolOrder }));
 }
+
+/**
+ * Hands the customer's payment link to the keyboard, which types it into the
+ * chat the merchant goes back to. `at` lets the keyboard take it only once.
+ */
+export async function handPaymentLinkToKeyboard(message: string): Promise<void> {
+  const stored = JSON.parse(getSettingsJson()) as Record<string, unknown>;
+  await setSettingsJson(JSON.stringify({ ...stored, askPaymentLink: { message, at: Date.now() } }));
+}
