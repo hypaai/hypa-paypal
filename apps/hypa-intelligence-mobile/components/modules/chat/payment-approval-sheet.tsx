@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -46,6 +46,8 @@ export function PaymentApprovalSheet({
   const [order, setOrder] = useState<CommerceOrder>({ ...approval, status: approval.status ?? 'draft' });
   const [loading, setLoading] = useState(false);
   const [working, setWorking] = useState(false);
+  // State updates land a moment late, so a quick second tap is stopped by this instead.
+  const busy = useRef(false);
   const [link, setLink] = useState<PaymentLink | null>(null);
   const [copied, setCopied] = useState(false);
   const [handedOff, setHandedOff] = useState(false);
@@ -65,13 +67,14 @@ export function PaymentApprovalSheet({
   }, [approval.orderId, token, visible]);
 
   const run = useCallback(async (action: () => Promise<CommerceOrder>) => {
-    if (!token || working) return;
+    if (!token || busy.current) return;
+    busy.current = true;
     setWorking(true);
     setError('');
     try { setOrder(await action()); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'The order could not be updated.'); }
-    finally { setWorking(false); }
-  }, [token, working]);
+    finally { busy.current = false; setWorking(false); }
+  }, [token]);
 
   /** The same order always gets the same checkout back, so it can be sent again. */
   const paymentLink = useCallback(async () => {
@@ -83,7 +86,8 @@ export function PaymentApprovalSheet({
   }, [link, order.orderId, token]);
 
   const withLink = useCallback(async (action: (current: PaymentLink) => Promise<void>) => {
-    if (!token || working) return;
+    if (!token || busy.current) return;
+    busy.current = true;
     setWorking(true);
     setError('');
     try {
@@ -91,8 +95,8 @@ export function PaymentApprovalSheet({
       setOrder(await getCommerceOrder(token, order.orderId));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not prepare the payment link.');
-    } finally { setWorking(false); }
-  }, [order.orderId, paymentLink, token, working]);
+    } finally { busy.current = false; setWorking(false); }
+  }, [order.orderId, paymentLink, token]);
 
   const shareLink = useCallback(
     () => withLink(async (current) => {
@@ -219,7 +223,7 @@ export function PaymentApprovalSheet({
                 <Pressable
                   accessibilityRole="button"
                   disabled={working}
-                  onPress={() => void run(() => approveCommerceOrder(token, order.orderId))}
+                  onPress={() => void run(() => approveCommerceOrder(token, order.orderId, { amount: order.amount, currency: order.currency }))}
                   style={({ pressed }) => [
                     styles.primaryAction,
                     { backgroundColor: colors.primary, opacity: working ? 0.5 : pressed ? 0.88 : 1 },
