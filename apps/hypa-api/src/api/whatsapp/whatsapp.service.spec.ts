@@ -19,7 +19,6 @@ const number = {
   id: 'num-1',
   userId: 'owner-1',
   phone_number_id: 'pn-1',
-  access_token: 'enc:token',
   auto_reply: false,
   alert: null as string | null,
   profile: {
@@ -148,7 +147,7 @@ describe('handle: voice note and photo', () => {
   it('turns a voice note into audio for the agent to transcribe and asks for a voice reply', async () => {
     const { service, agent } = setup();
     await service.handle({ ...text(), kind: 'voice', text: undefined, mediaId: 'media-1' });
-    expect(clientMock.downloadMedia).toHaveBeenCalledWith('media-1', 'token');
+    expect(clientMock.downloadMedia).toHaveBeenCalledWith('media-1');
     expect(agent.open.mock.calls[0][0]).toMatchObject({ input: '', audioType: 'base64', preferAudio: true, audio: Buffer.from('ogg-bytes').toString('base64') });
   });
 
@@ -214,7 +213,7 @@ describe('auto-reply', () => {
   it('sends a simple answer straight away when the owner turned auto-reply on', async () => {
     const { service } = setup({ numberRow: { auto_reply: true }, events: [done('We open 9am to 6pm. Agbada is ₦45,000.')] });
     await service.handle(text());
-    expect(clientMock.sendText).toHaveBeenCalledWith('pn-1', 'token', '2348000000001', 'We open 9am to 6pm. Agbada is ₦45,000.');
+    expect(clientMock.sendText).toHaveBeenCalledWith('pn-1', '2348000000001', 'We open 9am to 6pm. Agbada is ₦45,000.');
   });
 });
 
@@ -233,7 +232,7 @@ describe('the 24-hour window', () => {
     const draft = { id: 'draft-1', threadId: 'thread-1', status: 'pending', text: 'Your quote', audio_key: null, image_keys: [] };
     db.whatsapp_draft.findFirst = jest.fn().mockResolvedValue({ ...draft, thread: { ...thread, last_inbound_at: old, number } });
     await service.send('owner-1', 'draft-1');
-    expect(clientMock.sendTemplate).toHaveBeenCalledWith('pn-1', 'token', '2348000000001', { name: 'quote_ready', language: 'en' });
+    expect(clientMock.sendTemplate).toHaveBeenCalledWith('pn-1', '2348000000001', { name: 'quote_ready', language: 'en' });
     expect(clientMock.sendText).not.toHaveBeenCalled();
   });
 
@@ -244,10 +243,10 @@ describe('the 24-hour window', () => {
       thread: { ...thread, number },
     });
     await service.send('owner-1', 'draft-1', '  Edited by the owner  ');
-    expect(clientMock.sendText).toHaveBeenCalledWith('pn-1', 'token', '2348000000001', 'Edited by the owner');
+    expect(clientMock.sendText).toHaveBeenCalledWith('pn-1', '2348000000001', 'Edited by the owner');
     expect(media.get).toHaveBeenCalledWith('k1');
-    expect(clientMock.uploadMedia).toHaveBeenCalledWith('pn-1', 'token', expect.any(Buffer), 'audio/ogg');
-    expect(clientMock.sendAudio).toHaveBeenCalledWith('pn-1', 'token', '2348000000001', 'uploaded-1');
+    expect(clientMock.uploadMedia).toHaveBeenCalledWith('pn-1', expect.any(Buffer), 'audio/ogg');
+    expect(clientMock.sendAudio).toHaveBeenCalledWith('pn-1', '2348000000001', 'uploaded-1');
   });
 
   it('will not send a draft that was already handled', async () => {

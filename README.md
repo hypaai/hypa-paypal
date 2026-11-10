@@ -237,7 +237,7 @@ BASE_URL=http://localhost:5678
 ```
 
 - `JWT_SECRET` signs login tokens. Any long random string works locally.
-- `ENCRYPTION_KEY` encrypts each business's WhatsApp access token and each customer's phone number in the database. Once you have connected a number, keep the same value, or stored values can no longer be read.
+- `ENCRYPTION_KEY` encrypts each customer's phone number in the database. Once you have connected a number, keep the same value, or stored values can no longer be read.
 - `AGENT_MEDIA_SECRET` signs agent media URLs; the API refuses to start without it.
 - Keep the placeholder `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` lines from `.env.example` even if you do not use Google sign-in.
 - Keep Mansa disabled unless you have an account:
@@ -252,11 +252,10 @@ MANSA_TTS_ENABLED=false
 
 | Capability | Variable | Needed for |
 | --- | --- | --- |
-| Agent planning (default `meta/muse-spark-1.3`) | `META_MODEL_API_KEY` | The agent, and Hypa Bridge unless you set `WHATSAPP_MODEL` |
+| Agent planning (default `meta/muse-spark-1.3`) | `META_MODEL_API_KEY` | The agent and Hypa Bridge |
 | Hypa-hosted translation, speech and other tools | `HYPA_API_KEY` | Tools such as text-to-speech and translation |
-| OpenAI models | `OPENAI_API_KEY` | Optional; pair with `WHATSAPP_MODEL=openai/<model>` |
 | Speech workloads | `RUNPOD_API_KEY`, `ASR_SEVERLESS_API_KEY` | Optional |
-| Firebase audio storage | `FIREBASE_STORAGE_BUCKET`, `FIREBASE_SERVICE_ACCOUNT_JSON` | Optional |
+| Firebase audio storage | `FIREBASE_STORAGE_BUCKET`, `FIREBASE_SERVICE_ACCOUNT_JSON` | The API will not start without `FIREBASE_STORAGE_BUCKET`; keep the placeholder from `.env.example` |
 
 At minimum set **one model key** plus `HYPA_API_KEY`:
 
@@ -419,20 +418,19 @@ Hypa Bridge lets a small business answer WhatsApp customers with an assistant th
 ```dotenv
 WHATSAPP_APP_SECRET=any-local-string
 WHATSAPP_VERIFY_TOKEN=any-local-string
+WHATSAPP_ACCESS_TOKEN=any-local-string
+WHATSAPP_PHONE_NUMBER_IDS=1415999774934646
 WHATSAPP_GRAPH_URL=http://localhost:4010
-# Optional: the model that writes replies, as provider/model. It must support tools.
-# Unset uses meta/muse-spark-1.3, which needs META_MODEL_API_KEY.
-WHATSAPP_MODEL=
 ```
 
 Restart the API after changing `.env`.
 
 **B. Set up the business in the app.** Open **Settings → Hypa Bridge → Connect your number**.
 
-- Under **Connect WhatsApp**, enter the phone number ID `1415999774934646` (digits only, no spaces or commas) and any text as the access token. These manual fields are for testing. The **Connect WhatsApp** button (Embedded Signup) appears only when `META_APP_ID` and `WHATSAPP_EMBEDDED_CONFIG_ID` are set.
+- There is no number or token to enter. Tapping **Connect WhatsApp** gives the business the first number in `WHATSAPP_PHONE_NUMBER_IDS` that no other business uses (one number serves one business).
 - Under **Replies**, choose whether simple questions are answered automatically. Off means you approve every reply, which is best for a first run.
 - Under **Your business**, fill in the business name, what you sell, currency (a dropdown), the price list, opening hours per day, languages and tone. Use realistic prices; the assistant only quotes the list.
-- Tap **Connect**.
+- Tap **Connect WhatsApp**.
 
 **C. Start the simulator** in a second terminal, with the same secret the API uses:
 
@@ -487,11 +485,13 @@ Expected: a price quote taken from your list; an order recorded for two with the
 
 ## Connect a real WhatsApp number
 
-1. Create a Meta app with the WhatsApp product and a WhatsApp Business account.
-2. In `apps/hypa-api/.env`, set `WHATSAPP_APP_SECRET` (the Meta app secret) and `WHATSAPP_VERIFY_TOKEN` (any string you choose), and **remove** `WHATSAPP_GRAPH_URL`.
-3. Expose your API publicly (for example `ngrok http 5678`). In Meta's webhook settings, set the callback to `https://<your-public-url>/v2/whatsapp/webhook`, use the same verify token, and subscribe to `messages`.
-4. In the app, enter the number's **Phone number ID** and a permanent access token (the manual fields), or set `META_APP_ID` and `WHATSAPP_EMBEDDED_CONFIG_ID` to enable **Connect WhatsApp**. Embedded Signup has not been verified against a live Meta app yet.
-5. Create and get approved an `en` message template named `quote_ready` (or set `WHATSAPP_QUOTE_TEMPLATE` and `WHATSAPP_QUOTE_TEMPLATE_LANGUAGE`). It is used for replies sent after the 24-hour window.
+Hypa runs one Meta app and its own WhatsApp number(s). Businesses never handle a Meta credential.
+
+1. In the Meta app (WhatsApp product), open **API Setup**. Copy the **Phone number ID** and a **temporary access token** (24 hours; use a system user token for anything longer). Under **To**, add the phone that will play the customer and confirm its code.
+2. In `apps/hypa-api/.env`, set `WHATSAPP_APP_SECRET` (Meta app secret), `WHATSAPP_VERIFY_TOKEN` (any string you choose), `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_IDS` (the phone number ID; add more ids, comma separated, for more businesses). **Remove** `WHATSAPP_GRAPH_URL`. Restart the API.
+3. Expose your API publicly (for example `ngrok http 5678`). In Meta's **WhatsApp → Configuration**, set the callback to `https://<your-public-url>/v2/whatsapp/webhook`, use the same verify token, and subscribe to `messages`.
+4. In the app, open **Settings → Hypa Bridge**, fill in the business and tap **Connect WhatsApp**. Message the Meta test number from the phone you added in step 1.
+5. Create and get approved an `en` message template named `quote_ready` (or set `WHATSAPP_QUOTE_TEMPLATE` and `WHATSAPP_QUOTE_TEMPLATE_LANGUAGE`). It is used for replies sent after the 24-hour window. The Meta test number can only message phones you added in step 1.
 
 ## Try the PayPal adapter on its own
 
@@ -540,7 +540,7 @@ cd apps/hypa-intelligence-mobile && node --import tsx --test lib/bridge.test.ts
 
 ## Troubleshooting
 
-**The API reports a missing provider key, or a Bridge chat shows `agent_failed`.** The default model needs `META_MODEL_API_KEY`. Set it, or set `WHATSAPP_MODEL` to a model whose key you have (for example `openai/<model>` with `OPENAI_API_KEY`).
+**The API reports a missing provider key, or a Bridge chat shows `agent_failed`.** Hypa Bridge uses `meta/muse-spark-1.3`, which needs `META_MODEL_API_KEY`. Set it and restart the API.
 
 **The API does not start and mentions a missing secret.** Set `AGENT_MEDIA_SECRET`, `JWT_SECRET` and `ENCRYPTION_KEY` in `apps/hypa-api/.env`, and keep the placeholder Google values.
 
@@ -560,7 +560,7 @@ cd apps/hypa-intelligence-mobile && node --import tsx --test lib/bridge.test.ts
 
 **The simulator prints `webhook answered 403`.** `WHATSAPP_APP_SECRET` differs between the API and the simulator. Restart both with the same value.
 
-**The API logs "a message arrived for a number that is not connected" and no customer appears.** The phone number ID in the app differs from `SIM_PHONE_NUMBER_ID`. It must be digits only, with no trailing comma or space.
+**The API logs "a message arrived for a number that is not connected" and no customer appears.** `WHATSAPP_PHONE_NUMBER_IDS` differs from `SIM_PHONE_NUMBER_ID`, or the business has not tapped Connect yet. The id must be digits only, with no trailing comma or space.
 
 **No reply appears in the simulator.** Check that `WHATSAPP_GRAPH_URL` is `http://localhost:4010`, that Redis is running (Bridge replies go through a queue), and that automatic answers are on or you sent the draft in the app.
 
@@ -574,7 +574,7 @@ cd apps/hypa-intelligence-mobile && node --import tsx --test lib/bridge.test.ts
 
 - Never commit `.env` files, API keys, passwords, access tokens, private keys or service-account JSON.
 - Use sandbox and local credentials, not production ones. Do not point local development at production PostgreSQL or Redis.
-- A business's WhatsApp access token and a customer's phone number are stored encrypted with `ENCRYPTION_KEY`; the phone number is also kept hashed to find the thread and is never logged.
+- A customer's phone number is stored encrypted with `ENCRYPTION_KEY`; the phone number is also kept hashed to find the thread and is never logged.
 - Hypa Bridge rejects any webhook whose signature does not match `WHATSAPP_APP_SECRET`; PayPal webhooks are verified against `PAYPAL_WEBHOOK_ID`.
 - Money only moves after the merchant's explicit approval.
 - Rotate any credential that has been exposed.

@@ -1,9 +1,8 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { DbService } from 'src/libs/db/db.service';
-import { encryptString } from 'src/utils/encryption.utils';
 import { Prisma } from 'src/generated/prisma/client';
 import { businessProfileSchema } from './bridge.profile';
-import { exchangeSignupCode, findSharedNumber, readNumber, subscribeToWebhook } from './whatsapp.client';
+import { readNumber, whatsappNumberIds } from './whatsapp.client';
 
 const profileOf = (value: unknown) => {
   const parsed = businessProfileSchema.safeParse(value);
@@ -16,8 +15,15 @@ const profileOf = (value: unknown) => {
 export class WhatsappOwnerService {
   constructor(private readonly db: DbService) {}
 
-  private async numberOf(userId: string) {
+  /** The business's number, unless it is not one of Hypa's listed numbers any more (a local-demo id), which counts as not connected. */
+  private async ownNumber(userId: string) {
     const number = await this.db.whatsapp_number.findFirst({ where: { userId }, orderBy: { created_at: 'asc' } });
+    const offered = whatsappNumberIds();
+    return number && (!offered.length || offered.includes(number.phone_number_id)) ? number : null;
+  }
+
+  private async numberOf(userId: string) {
+    const number = await this.ownNumber(userId);
     if (!number) throw new NotFoundException('No WhatsApp number is connected');
     return number;
   }
@@ -27,38 +33,38 @@ export class WhatsappOwnerService {
   }
 
   async getNumber(userId: string) {
-    const number = await this.db.whatsapp_number.findFirst({ where: { userId }, orderBy: { created_at: 'asc' } });
+    const number = await this.ownNumber(userId);
     return number ? this.view(number) : null;
   }
 
-  /** The token is proof the owner controls the number: it is checked with Meta before anything is saved. */
-  async connect(userId: string, input: { phoneNumberId: string; accessToken: string; profile: unknown; autoReply?: boolean }) {
+  /**
+   * Gives the business one of Hypa's WhatsApp numbers: its own if it has one already, else the first number nobody uses.
+   * Customers write to that number, and the business never handles a Meta credential.
+   */
+  async connect(userId: string, input: { profile: unknown; autoReply?: boolean }) {
     const profile = profileOf(input.profile);
-    const live = await readNumber(input.phoneNumberId, input.accessToken).catch(() => {
-      throw new BadRequestException('WhatsApp did not accept that number and token');
+    const own = await this.ownNumber(userId);
+    if (own) {
+      return this.view(await this.db.whatsapp_number.update({ where: { id: own.id }, data: { profile, auto_reply: input.autoReply ?? own.auto_reply, alert: null } }));
+    }
+    const offered = whatsappNumberIds();
+    if (!offered.length) throw new ServiceUnavailableException('WhatsApp is not set up on this server');
+    const used = new Set((await this.db.whatsapp_number.findMany({ where: { phone_number_id: { in: offered } }, select: { phone_number_id: true } })).map((row) => row.phone_number_id));
+    const free = offered.find((id) => !used.has(id));
+    if (!free) throw new ConflictException('Every WhatsApp number is in use right now');
+    // Reading the number proves Hypa's token works for it, and gives the number customers see.
+    const live = await readNumber(free).catch((error: Error) => {
+      throw new BadRequestException(`WhatsApp did not accept that number: ${error.message}`);
     });
-    const taken = await this.db.whatsapp_number.findUnique({ where: { phone_number_id: input.phoneNumberId } });
-    if (taken && taken.userId !== userId) throw new ConflictException('That number is connected to another account');
-    const data = { access_token: await encryptString(input.accessToken), display_phone: live.display_phone_number, profile, auto_reply: input.autoReply ?? false, alert: null };
-    const number = taken
-      ? await this.db.whatsapp_number.update({ where: { id: taken.id }, data })
-      : await this.db.whatsapp_number.create({ data: { ...data, userId, phone_number_id: input.phoneNumberId } });
-    return this.view(number);
-  }
-
-  /** Embedded Signup: Meta's login code stands in for the pasted number ID and token. */
-  async connectWithMeta(userId: string, input: { code: string; profile: unknown; autoReply?: boolean }) {
-    profileOf(input.profile);
-    const shared = await exchangeSignupCode(input.code)
-      .then(async (accessToken) => ({ accessToken, ...(await findSharedNumber(accessToken)) }))
-      .catch((error: Error) => {
-        throw new BadRequestException(error.message);
+    // A number left over from a local demo is dropped, with its threads, so the business starts fresh.
+    await this.db.whatsapp_number.deleteMany({ where: { userId, phone_number_id: { notIn: offered } } });
+    const number = await this.db.whatsapp_number
+      .create({ data: { userId, phone_number_id: free, display_phone: live.display_phone_number, profile, auto_reply: input.autoReply ?? false, alert: null } })
+      .catch((error: unknown) => {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('That WhatsApp number was just taken. Try again.');
+        throw error;
       });
-    const number = await this.connect(userId, { phoneNumberId: shared.phoneNumberId, accessToken: shared.accessToken, profile: input.profile, autoReply: input.autoReply });
-    await subscribeToWebhook(shared.wabaId, shared.accessToken).catch(() => {
-      throw new BadRequestException('Connected, but WhatsApp would not send messages to Hypa. Try again.');
-    });
-    return number;
+    return this.view(number);
   }
 
   async update(userId: string, input: { profile?: unknown; autoReply?: boolean }) {

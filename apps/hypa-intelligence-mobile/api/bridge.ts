@@ -72,14 +72,8 @@ export interface BridgeThread {
 
 export const getBridgeNumber = () => apiGet<BridgeNumber | null>('/v2/whatsapp/number');
 
-export const connectBridgeNumber = (input: { phoneNumberId: string; accessToken: string; profile: BridgeProfile; autoReply: boolean }) =>
-  apiPost<BridgeNumber>('/v2/whatsapp/number', input);
-
-/** `url` is null until the Meta app is set up for Embedded Signup. */
-export const getBridgeSignup = () => apiGet<{ url: string | null; redirectUri: string }>('/v2/whatsapp/signup');
-
-export const connectBridgeWithMeta = (input: { code: string; profile: BridgeProfile; autoReply: boolean }) =>
-  apiPost<BridgeNumber>('/v2/whatsapp/number/meta', input);
+/** Gives the business one of Hypa's WhatsApp numbers. Customers write to it; there is no account or token to enter. */
+export const connectBridgeNumber = (input: { profile: BridgeProfile; autoReply: boolean }) => apiPost<BridgeNumber>('/v2/whatsapp/number', input);
 
 export const updateBridgeNumber =async (input: { profile?: BridgeProfile; autoReply?: boolean }) =>
   (await api.patch<BridgeNumber>('/v2/whatsapp/number', input)).data;

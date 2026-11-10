@@ -9,6 +9,7 @@ import { discardBridgeDraft, replyInBridgeThread, sendBridgeDraft, setBridgeMode
 import { DraftCard } from '@/components/modules/bridge/draft-card';
 import { OrderCard } from '@/components/modules/bridge/order-card';
 import Body from '@/components/shared/body';
+import { TypingDots } from '@/components/shared/typing-dots';
 import { BackButton } from '@/components/shared/back-button';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
@@ -77,6 +78,9 @@ export default function BridgeThread() {
   });
 
   const data = thread.data;
+  // The assistant is writing while the customer's last message is fresh, nothing waits for approval, and the thread is not paused.
+  const last = data?.messages[data.messages.length - 1];
+  const assistantTyping = !!data && data.mode === 'agent' && data.drafts.length === 0 && last?.role === 'user' && Date.now() - new Date(last.createdAt).getTime() < 90_000;
   const busy = send.isPending || discard.isPending || mode.isPending || say.isPending;
   const owner = data?.mode === 'owner';
 
@@ -155,6 +159,14 @@ export default function BridgeThread() {
             <Text className="py-6 text-center text-[13px] text-zinc-500 dark:text-zinc-400" style={{ fontFamily: FONTS.main.regular }}>
               No messages yet.
             </Text>
+          ) : null}
+
+          {assistantTyping ? (
+            <View className="mt-2 items-end">
+              <View className="rounded-2xl bg-zinc-900 px-3.5 py-3 dark:bg-zinc-100">
+                <TypingDots color={colors.textSubtle} />
+              </View>
+            </View>
           ) : null}
 
           {data?.drafts.map((draft) => (

@@ -744,11 +744,9 @@ model whatsapp_number {
   id              String   @id @default(cuid())
   user            user     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId          String
-  // The Cloud API's id for the number: what Meta's webhook names.
+  // The Cloud API's id for one of Hypa's WhatsApp numbers: what Meta's webhook names.
   phone_number_id String   @unique
   display_phone   String?
-  // Encrypted. Only this server reads it back, to call the Cloud API for this number.
-  access_token    String
   // BusinessProfile: name, what it sells, price list, hours, languages, tone.
   profile         Json
   // Lets simple questions go out without the owner's approval.

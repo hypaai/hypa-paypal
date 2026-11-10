@@ -1,21 +1,12 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { type UserType } from 'src/db-types';
 import { User } from 'src/libs/shared/decorator/user.decorator';
 import { AuthGuard } from '../auth/auth.guard';
-import { SIGNUP_REDIRECT, signupUrl } from './whatsapp.client';
 import { WhatsappOwnerService } from './whatsapp.owner.service';
 import { WhatsappService } from './whatsapp.service';
 
 class ConnectNumberDto {
-  @IsString() @Matches(/^\d{1,64}$/, { message: 'phoneNumberId must be digits only' }) phoneNumberId: string;
-  @IsString() @MinLength(10) @MaxLength(1000) accessToken: string;
-  @IsObject() profile: Record<string, unknown>;
-  @IsOptional() @IsBoolean() autoReply?: boolean;
-}
-
-class ConnectWithMetaDto {
-  @IsString() @MinLength(1) @MaxLength(2000) code: string;
   @IsObject() profile: Record<string, unknown>;
   @IsOptional() @IsBoolean() autoReply?: boolean;
 }
@@ -54,17 +45,6 @@ export class WhatsappOwnerController {
   @Post('number')
   connect(@Body() body: ConnectNumberDto, @User() user: UserType) {
     return this.owner.connect(user.id, body);
-  }
-
-  /** Where the app sends the owner to log in to Meta. `url` is null until Embedded Signup is set up. */
-  @Get('signup')
-  signup() {
-    return { url: signupUrl(), redirectUri: SIGNUP_REDIRECT };
-  }
-
-  @Post('number/meta')
-  connectWithMeta(@Body() body: ConnectWithMetaDto, @User() user: UserType) {
-    return this.owner.connectWithMeta(user.id, body);
   }
 
   @Patch('number')

@@ -21,11 +21,8 @@ import {
 } from './whatsapp.client';
 import { type IncomingMessage } from './whatsapp.payload';
 
-/** Muse Spark runs the business agent, unless `WHATSAPP_MODEL` ("provider/model") names another. */
-function bridgeModel() {
-  const [provider, ...rest] = (process.env.WHATSAPP_MODEL?.trim() || 'meta/muse-spark-1.3').split('/');
-  return { provider, model: rest.join('/') };
-}
+/** Muse Spark runs the business agent. */
+const BRIDGE_MODEL = { provider: 'meta', model: 'muse-spark-1.3' };
 
 /** Only what a shop assistant needs. Payments are a later ticket. */
 const BRIDGE_TOOLS = ['text_to_speech', 'translate_message', 'extract_text_from_image', 'list_languages'];
@@ -104,7 +101,6 @@ export class WhatsappService {
       await this.setAlert(number.id, 'profile_incomplete');
       return;
     }
-    const token = await this.tokenOf(number);
     let order: RecordedOrder | undefined;
     let handoff: string | undefined;
     const tools = bridgeTools({
@@ -118,13 +114,13 @@ export class WhatsappService {
       },
     });
 
-    const turn = await this.turnInput(message, token);
+    const turn = await this.turnInput(message);
     let events: AgentEvent[];
     try {
       const job = await this.agent.open({
         requestId: requestIdFor(message.id),
         userId: number.userId,
-        ...bridgeModel(),
+        ...BRIDGE_MODEL,
         surface: 'app',
         chatId: thread.chatId,
         language: profile.data.languages[0],
@@ -198,39 +194,38 @@ export class WhatsappService {
 
   /** Sends a draft: free-form inside the 24-hour window, the approved template outside it. */
   private async deliver(number: NumberRow, thread: ThreadRow, draft: DraftRow): Promise<DraftRow> {
-    const token = await this.tokenOf(number);
     const to = await decryptString(thread.customer_wa_id);
     if (!withinServiceWindow(thread.last_inbound_at)) {
       const template = { name: process.env.WHATSAPP_QUOTE_TEMPLATE?.trim() || 'quote_ready', language: process.env.WHATSAPP_QUOTE_TEMPLATE_LANGUAGE?.trim() || 'en' };
-      await sendTemplate(number.phone_number_id, token, to, template);
+      await sendTemplate(number.phone_number_id, to, template);
       return this.db.whatsapp_draft.update({ where: { id: draft.id }, data: { status: 'template_sent', text: draft.text, sent_at: new Date() } });
     }
-    await sendText(number.phone_number_id, token, to, draft.text);
+    await sendText(number.phone_number_id, to, draft.text);
     if (draft.audio_key) {
       const recording = await this.media.get(draft.audio_key);
       if (recording) {
-        const id = await uploadMedia(number.phone_number_id, token, await convertAudio(recording, 'voice'), 'audio/ogg');
-        await sendAudio(number.phone_number_id, token, to, id);
+        const id = await uploadMedia(number.phone_number_id, await convertAudio(recording, 'voice'), 'audio/ogg');
+        await sendAudio(number.phone_number_id, to, id);
       }
     }
     for (const key of draft.image_keys) {
       const picture = await this.media.get(key);
       if (picture) {
         const mime = picture[0] === 0xff ? 'image/jpeg' : 'image/png';
-        await sendImage(number.phone_number_id, token, to, await uploadMedia(number.phone_number_id, token, picture, mime));
+        await sendImage(number.phone_number_id, to, await uploadMedia(number.phone_number_id, picture, mime));
       }
     }
     return this.db.whatsapp_draft.update({ where: { id: draft.id }, data: { status: 'sent', text: draft.text, sent_at: new Date() } });
   }
 
   /** The agent's input for what the customer sent: text as is, a voice note as audio to transcribe, a photo as an attachment. */
-  private async turnInput(message: IncomingMessage, token: string) {
+  private async turnInput(message: IncomingMessage) {
     if (message.kind === 'voice' && message.mediaId) {
-      const { bytes } = await downloadMedia(message.mediaId, token);
+      const { bytes } = await downloadMedia(message.mediaId);
       return { input: '', audio: (await convertAudio(bytes, 'speech')).toString('base64'), audioType: 'base64' as const, preferAudio: true };
     }
     if (message.kind === 'image' && message.mediaId) {
-      const { bytes, mimeType } = await downloadMedia(message.mediaId, token);
+      const { bytes, mimeType } = await downloadMedia(message.mediaId);
       return { input: message.text ?? '', attachments: [{ data: bytes.toString('base64'), mime: mimeType.split(';')[0] }] };
     }
     if (message.kind === 'text') return { input: message.text ?? '' };
@@ -288,10 +283,6 @@ export class WhatsappService {
 
   private setAlert(numberId: string, alert: string | null) {
     return this.db.whatsapp_number.update({ where: { id: numberId }, data: { alert } });
-  }
-
-  private tokenOf(number: NumberRow) {
-    return decryptString(number.access_token);
   }
 
   private async ownedThread(userId: string, threadId: string) {

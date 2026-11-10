@@ -2,7 +2,7 @@
  * Plays WhatsApp for local demos of Hypa Bridge, with no Meta account.
  *
  *   1. Start the API with WHATSAPP_GRAPH_URL=http://localhost:4010 and WHATSAPP_APP_SECRET set.
- *   2. Connect a number in the app (or POST /v2/whatsapp/number) with the phone number id below and any token.
+ *   2. Set WHATSAPP_ACCESS_TOKEN to any text and WHATSAPP_PHONE_NUMBER_IDS to the phone number id below, then connect the business in the app.
  *   3. pnpm --filter hypa-api whatsapp:sim, then type as the customer.
  *
  * It signs webhooks like Meta does, and answers the Graph calls the bridge makes, printing every reply.

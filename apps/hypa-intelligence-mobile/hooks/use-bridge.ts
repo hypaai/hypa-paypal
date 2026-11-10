@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { getBridgeNumber, getBridgeSignup, getBridgeThread, getBridgeThreads } from '@/api/bridge';
+import { getBridgeNumber, getBridgeThread, getBridgeThreads } from '@/api/bridge';
 import { useUser } from '@/lib/user-provider';
 
 /** Customers write at any time, so the open screens look again every 15 seconds. */
@@ -15,11 +15,6 @@ export const bridgeKeys = {
 export function useBridgeNumber() {
   const { user } = useUser();
   return useQuery({ queryKey: bridgeKeys.number, queryFn: getBridgeNumber, enabled: !!user?.id });
-}
-
-export function useBridgeSignup() {
-  const { user } = useUser();
-  return useQuery({ queryKey: ['bridge', 'signup'] as const, queryFn: getBridgeSignup, enabled: !!user?.id, staleTime: Infinity });
 }
 
 export function useBridgeThreads(enabled: boolean) {
