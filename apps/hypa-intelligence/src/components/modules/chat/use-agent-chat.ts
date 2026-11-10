@@ -19,6 +19,7 @@ import {
 } from "./chat-history";
 
 import { agentConnection } from "@/lib/api";
+import { useOrderApprovalStore } from "@/lib/order-approval-store";
 import { analytics } from "@/lib/analytics";
 
 export interface ChatTurn {
@@ -168,6 +169,8 @@ export function useAgentChat(options: { provider: string; model: string }) {
         if (run.stopped) return;
         if (event.type === "done" || event.type === "error")
           terminalEvent = true;
+        // A draft order opens its approval card; nothing is charged until the merchant approves it.
+        if (event.type === "approval") useOrderApprovalStore.getState().open(event.orderId);
         if (event.type === "tool_result") {
           analytics.capture("chat_tool_used", {
             tool: event.name,

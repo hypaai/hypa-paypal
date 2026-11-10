@@ -14,10 +14,16 @@ import ChatPage from "@/pages/chat";
 import { TranslateModuleShell } from "@/pages/translate/module-shell";
 import { DictionaryModuleShell } from "@/pages/dictionary/module-shell";
 import IndexPage from "@/pages/index";
+import OrderApprovalPage from "@/pages/order-approval";
+import PaymentReceiptPage from "@/pages/payment-receipt";
+import { OrderApprovalHost } from "@/components/modules/commerce/order-approval-host";
 import Navbar from "@/components/modules/nav/navbar";
 
 function App() {
-  const isChat = useLocation().pathname.replace(/\/$/, "") === "/chat";
+  const { pathname } = useLocation();
+  const isChat = pathname.replace(/\/$/, "") === "/chat";
+  // PayPal returns the customer here. They have no Hypa account, so the page carries none of the app.
+  const isReceipt = pathname.startsWith("/pay/");
   const [viewportHeight, setViewportHeight] = useState<number>();
 
   useEffect(() => {
@@ -36,6 +42,14 @@ function App() {
     };
   }, [isChat]);
 
+  if (isReceipt) {
+    return (
+      <Routes>
+        <Route element={<PaymentReceiptPage />} path="/pay/:id" />
+      </Routes>
+    );
+  }
+
   return (
     <div
       className={`flex flex-col bg-[var(--background)] ${isChat ? "h-dvh overflow-hidden" : "min-h-dvh"}`}
@@ -47,6 +61,7 @@ function App() {
           <Route element={<IndexPage />} path="/" />
           <Route element={<PolicyPage />} path="/privacy" />
           <Route element={<ChatPage />} path="/chat" />
+          <Route element={<OrderApprovalPage />} path="/orders/:id/approve" />
           <Route element={<Navigate replace to="/privacy" />} path="/policy" />
 
           <Route element={<DictionaryModuleShell />} path="/dictionary">
@@ -70,6 +85,7 @@ function App() {
           </Route>
         </Routes>
       </div>
+      <OrderApprovalHost />
     </div>
   );
 }

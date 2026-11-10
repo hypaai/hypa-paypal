@@ -90,6 +90,18 @@ import { synthesizeSpeech } from "@/lib/product-api";
 import { FONTS } from "@/constants/fonts";
 import { Text } from "@/components/ui/text";
 import { File } from "expo-file-system";
+import { PaymentApprovalRow } from "@/components/modules/chat/payment-approval-sheet";
+import { isPayPalUrl } from "@hypa/intelligence-core/payment-link";
+
+/**
+ * A checkout link in the thread belongs to the customer. Opening it would put
+ * the merchant inside their own customer's checkout, so it is passed on instead.
+ */
+function openChatLink(url: string) {
+  if (!isPayPalUrl(url)) return true;
+  void Share.share({ message: url });
+  return false;
+}
 
 const STARTERS = [
   "Make a flyer: Ada's Tailoring, open Saturdays, in Igbo and English.",
@@ -776,6 +788,12 @@ export function ChatScreen({
                     ))}
                   </View>
                 ) : null}
+                {item.approval ? (
+                  <PaymentApprovalRow
+                    approval={item.approval}
+                    token={chat.connection.token}
+                  />
+                ) : null}
                 {mine ? (
                   item.content ? (
                     <Text
@@ -791,6 +809,7 @@ export function ChatScreen({
                   ) : null
                 ) : item.content ? (
                   <Markdown
+                    onLinkPress={openChatLink}
                     style={{
                       body: {
                         color: colors.text,

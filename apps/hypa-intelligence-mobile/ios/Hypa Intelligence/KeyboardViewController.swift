@@ -635,6 +635,7 @@ class KeyboardViewController: UIInputViewController {
     resumeAppMic()
     rebuildKeyboard()
     publishPredictionContext()
+    DispatchQueue.main.async { [weak self] in self?.insertSharedPaymentLink() }
     if usesNeuralEngine { modelQueue.async { [tinyKeys] in tinyKeys.load() } }
   }
 
@@ -2349,6 +2350,8 @@ class KeyboardViewController: UIInputViewController {
     var error: String?
     var errorDetail: String?
     var retryable = true
+    /// Draft order from Hypa's payment tool, waiting for the merchant's tap in the app.
+    var approval: [String: Any]?
   }
 
   private static let askContextLimit = 5000
@@ -2639,6 +2642,8 @@ class KeyboardViewController: UIInputViewController {
       askTurn?.steps[index].ok = event["ok"] as? Bool ?? false
     case "audio":
       if let url = event["url"] as? String, !url.isEmpty { askTurn?.audioURL = url }
+    case "approval":
+      askTurn?.approval = event
     case "done":
       askTurn?.text = (event["text"] as? String ?? "").trimmingCharacters(
         in: .whitespacesAndNewlines)
@@ -2702,6 +2707,7 @@ class KeyboardViewController: UIInputViewController {
         case "done":
           self.askTurn?.text = (body["message"] as? String ?? "").trimmingCharacters(
             in: .whitespacesAndNewlines)
+          if let approval = body["approval"] as? [String: Any] { self.askTurn?.approval = approval }
           self.askTurn?.outcome = .recovered
           self.refreshAsk()
           return
@@ -2749,7 +2755,8 @@ class KeyboardViewController: UIInputViewController {
   private func completeAsk(action: String, generation: Int) {
     guard let turn = askTurn else { return }
     let text = turn.text
-    guard action != "show", !text.isEmpty else {
+    // An order's note is for the merchant; the customer gets the payment link once it is approved.
+    guard action != "show", !text.isEmpty, turn.approval == nil else {
       askTurn?.outcome = .shown
       playAskAudio()
       refreshAsk()
@@ -2857,6 +2864,65 @@ class KeyboardViewController: UIInputViewController {
     }
   }
 
+  private func approvalSummary(_ approval: [String: Any]) -> String {
+    let customer = (approval["customer"] as? [String: Any])?["name"] as? String ?? ""
+    let price = "\(approval["currency"] as? String ?? "") \(approval["amount"] as? String ?? "")"
+      .trimmingCharacters(in: .whitespaces)
+    let summary = [customer, price].filter { !$0.isEmpty }.joined(separator: " · ")
+    return summary.isEmpty ? "Order needs approval" : summary
+  }
+
+  private func askApprovalOpenLabel(_ approval: [String: Any]) -> String {
+    let language = (approval["merchantLanguage"] as? String ?? "en").lowercased()
+      .split(whereSeparator: { $0 == "-" || $0 == "_" }).first.map(String.init) ?? "en"
+    switch language {
+    case "fr": return "Ouvrir Hypa"
+    case "yo": return "Ṣí Hypa láti fọwọ́sí"
+    case "ig": return "Mepee Hypa ka ị kwado"
+    case "ha": return "Buɗe Hypa don amincewa"
+    case "pcm": return "Open Hypa make you approve"
+    default: return "Open Hypa to approve"
+    }
+  }
+
+  /// Types the payment link the merchant shared from the app into the chat they came back to.
+  /// The app hands it over once; it is taken only while fresh, so a later field never gets it.
+  private func insertSharedPaymentLink() {
+    let defaults = keyboardSharedDefaults(reason: "paymentLink").defaults
+    guard let data = defaults.string(forKey: prefsKey)?.data(using: .utf8),
+      let settings = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let link = settings["askPaymentLink"] as? [String: Any],
+      let message = (link["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+      !message.isEmpty,
+      let at = (link["at"] as? NSNumber)?.doubleValue,
+      at != defaults.double(forKey: Self.paymentLinkTakenKey),
+      Date().timeIntervalSince1970 * 1000 - at < 10 * 60 * 1000
+    else { return }
+    defaults.set(at, forKey: Self.paymentLinkTakenKey)
+    // Shared into this chat from the share sheet: it is already in the box.
+    let around = (textDocumentProxy.documentContextBeforeInput ?? "") + (textDocumentProxy.documentContextAfterInput ?? "")
+    if let url = message.components(separatedBy: "\n").last, around.contains(url) { return }
+    textDocumentProxy.insertText(message)
+    appendToLocalTextCache(message)
+  }
+
+  private static let paymentLinkTakenKey = "ask_payment_link_taken"
+
+  private func openOrderApproval(_ approval: [String: Any]) {
+    guard let orderId = approval["orderId"] as? String, !orderId.isEmpty,
+      let encoded = orderId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+    else { return }
+    // The app routes on the path, so the host stays empty: three slashes. With
+    // two, "orders" is read as the host, the route never matches, and the tap
+    // does nothing. The last candidate at least brings the app forward.
+    let candidates = [
+      "hypaintelligence:///orders/\(encoded)/approve?from=keyboard",
+      "hypaintelligence://orders/\(encoded)/approve?from=keyboard",
+      "hypaintelligence:///(entry)",
+    ].compactMap(URL.init(string:))
+    openFirstAvailableHostURL(candidates[...])
+  }
+
   private func openAskInHypa() {
     // Signed in: open the saved keyboard thread (full context). Otherwise a new chat with the message typed in.
     if let chatId = askTurn?.chatId, let url = URL(string: "hypaintelligence://chat/\(chatId)") {
@@ -2939,6 +3005,11 @@ class KeyboardViewController: UIInputViewController {
     }
     guard let outcome = turn.outcome else {
       return makeAskRow(icon: makeAskSpinner(), title: turn.activity, trailing: [])
+    }
+    if let approval = turn.approval {
+      return makeAskRow(
+        icon: nil, title: approvalSummary(approval),
+        trailing: [makeAskPill(askApprovalOpenLabel(approval)) { [weak self] in self?.openOrderApproval(approval) }])
     }
 
     let reply = makeAskPill("Reply") { [weak self] in self?.replyToAsk() }

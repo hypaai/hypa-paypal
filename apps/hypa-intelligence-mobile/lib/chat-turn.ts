@@ -36,6 +36,7 @@ export async function runChatTurn(input: {
   });
   if (input.signal.aborted) return;
   if (result.status !== 'done') throw new Error('The reply is not ready. Reconnect to check it without paying again.');
+  if (result.approval) onEvent({ type: 'approval', ...result.approval });
   onEvent({ type: 'done', action: result.action ?? 'show', text: result.message,
     speak: Boolean(result.audioUrl), audioUrl: result.audioUrl, chatId: result.chatId });
 }

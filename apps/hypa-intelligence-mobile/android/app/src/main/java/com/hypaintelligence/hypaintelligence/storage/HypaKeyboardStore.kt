@@ -10,6 +10,9 @@ import org.json.JSONObject
 object HypaKeyboardStore {
   const val PREFS_NAME: String = "hypa_keyboard_store"
   const val KEY_SETTINGS_JSON: String = "settings_json"
+  private const val KEY_PAYMENT_LINK = "askPaymentLink"
+  private const val KEY_PAYMENT_LINK_TAKEN = "ask_payment_link_taken"
+  private const val PAYMENT_LINK_TTL_MS = 10 * 60_000L
 
   fun prefs(context: Context): SharedPreferences =
     context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -83,6 +86,21 @@ object HypaKeyboardStore {
     } else {
       raw
     }
+  }
+
+  /**
+   * The message the app's "Share payment link" handed over, once and while fresh, so the
+   * keyboard can type it into the chat the merchant returns to.
+   */
+  fun takePaymentLink(context: Context): String? {
+    val link = runCatching { JSONObject(getSettingsJson(context)).optJSONObject(KEY_PAYMENT_LINK) }.getOrNull() ?: return null
+    val at = link.optLong("at")
+    val message = link.optString("message").trim()
+    val prefs = prefs(context)
+    if (message.isEmpty() || at == prefs.getLong(KEY_PAYMENT_LINK_TAKEN, 0L)) return null
+    if (System.currentTimeMillis() - at > PAYMENT_LINK_TTL_MS) return null
+    prefs.edit().putLong(KEY_PAYMENT_LINK_TAKEN, at).apply()
+    return message
   }
 
   fun setSettingsJson(context: Context, json: String) {

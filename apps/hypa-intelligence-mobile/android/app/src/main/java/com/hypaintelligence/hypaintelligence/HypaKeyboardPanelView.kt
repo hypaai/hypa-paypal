@@ -809,6 +809,16 @@ class HypaKeyboardPanelView(
     }
   }
 
+  /** Types the payment link the merchant shared from the app into the chat they came back to. */
+  fun insertSharedPaymentLink() {
+    if (editorInfo?.packageName == context.packageName) return
+    val input = inputSupplier() ?: return
+    val message = HypaKeyboardStore.takePaymentLink(context) ?: return
+    // Shared into this chat from the share sheet: it is already in the box.
+    if (currentAskDocument(input).contains(message.substringAfterLast('\n'))) return
+    textEngine.commitText(input, message)
+  }
+
   fun bindEditorInfo(info: EditorInfo?) {
     recentAlternateUnit = null
     contextEngine.bindEditorInfo(info)
@@ -2959,6 +2969,8 @@ class HypaKeyboardPanelView(
     var error: String? = null
     var errorDetail: String? = null
     var retryable = true
+    /** A payment order the merchant must approve in the app. */
+    var approval: JSONObject? = null
   }
 
   private val askService = AskService()
@@ -3194,6 +3206,7 @@ class HypaKeyboardPanelView(
         step.ok = event.optBoolean("ok", false)
       }
       "audio" -> event.text("url")?.let { turn.audioUrl = it }
+      "approval" -> turn.approval = event
       "done" -> {
         turn.text = event.text("text").orEmpty()
         turn.speak = event.optBoolean("speak", false)
@@ -3223,7 +3236,8 @@ class HypaKeyboardPanelView(
 
   private fun completeAsk(action: String) {
     val turn = askTurn ?: return
-    if (action == "show" || turn.text.isEmpty()) {
+    // An order's note is for the merchant; the customer gets the payment link once it is approved.
+    if (action == "show" || turn.text.isEmpty() || turn.approval != null) {
       turn.outcome = AskOutcome.SHOWN
       playAskAudio()
       refreshAsk()
@@ -3309,6 +3323,7 @@ class HypaKeyboardPanelView(
             failAsk(generation, "No photo sent", null)
           }
           code == 200 && body?.optString("status") == "done" -> {
+            body.optJSONObject("approval")?.let { current.approval = it }
             current.text = body.text("message").orEmpty()
             current.outcome = AskOutcome.RECOVERED
             refreshAsk()
@@ -3380,6 +3395,35 @@ class HypaKeyboardPanelView(
     clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("Hypa", text))
     askCopied = true
     refreshAsk()
+  }
+
+  private fun approvalSummary(approval: JSONObject): String =
+    listOf(
+      approval.optJSONObject("customer")?.optString("name").orEmpty(),
+      "${approval.optString("currency")} ${approval.optString("amount")}".trim(),
+    ).filter { it.isNotBlank() }.joinToString(" · ").ifEmpty { "Order needs approval" }
+
+  private fun askApprovalOpenLabel(approval: JSONObject): String =
+    when (approval.optString("merchantLanguage", "en").lowercase().substringBefore('-').substringBefore('_')) {
+      "fr" -> "Ouvrir Hypa"
+      "yo" -> "Ṣí Hypa láti fọwọ́sí"
+      "ig" -> "Mepee Hypa ka ị kwado"
+      "ha" -> "Buɗe Hypa don amincewa"
+      "pcm" -> "Open Hypa make you approve"
+      else -> "Open Hypa to approve"
+    }
+
+  private fun openOrderApproval(approval: JSONObject) {
+    val orderId = approval.optString("orderId").ifBlank { return }
+    // The app routes on the path, so the host stays empty: three slashes. With
+    // two, "orders" is read as the host and the route never matches.
+    val intent = android.content.Intent(
+      android.content.Intent.ACTION_VIEW,
+      android.net.Uri.parse("hypaintelligence:///orders/${android.net.Uri.encode(orderId)}/approve?from=keyboard"),
+    )
+      .setPackage(context.packageName)
+      .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+    if (intent.resolveActivity(context.packageManager) != null) startHostApp(intent) else openHostApp()
   }
 
   private fun openAskInHypa() {
@@ -3698,6 +3742,12 @@ class HypaKeyboardPanelView(
     }
 
     val outcome = turn.outcome
+    turn.approval?.takeIf { outcome != null }?.let { approval ->
+      row.addView(askLabel(approvalSummary(approval), label))
+      row.addView(askAction(askApprovalOpenLabel(approval), label) { openOrderApproval(approval) })
+      row.addView(askInfoButton(label))
+      return row
+    }
     if (outcome == null) {
       row.addView(askSpinner(label))
       row.addView(askLabel(turn.activity, label))

@@ -60,6 +60,7 @@ class HypaKeyboardInputMethodService : InputMethodService() {
     panel?.bindEditorInfo(info)
     panel?.resetSessionState(preserveActiveMode = restarting)
     panel?.bindSelection(info?.initialSelStart ?: -1, info?.initialSelEnd ?: -1)
+    panel?.insertSharedPaymentLink()
     // Pick up an Ask photo request once the user is back in another app.
     if (info?.packageName != packageName) panel?.resumeAskCamera()
   }
