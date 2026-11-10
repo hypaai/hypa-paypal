@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { DbService } from 'src/libs/db/db.service';
 import { Prisma } from 'src/generated/prisma/client';
 import { businessProfileSchema } from './bridge.profile';
@@ -47,6 +47,10 @@ export class WhatsappOwnerService {
       return this.view(await this.db.whatsapp_number.update({ where: { id: own.id }, data: { profile, auto_reply: input.autoReply ?? own.auto_reply, alert: null } }));
     }
     if (!offered.length) throw new ServiceUnavailableException('WhatsApp is not set up on this server');
+    // Hypa has few numbers for now, so only the listed accounts may take one.
+    const user = await this.db.user.findUnique({ where: { id: userId }, select: { email: true } });
+    const allowed = (process.env.WHATSAPP_CONNECT_EMAILS ?? '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean);
+    if (!user || !allowed.includes(user.email.toLowerCase())) throw new ForbiddenException('Hypa Bridge is not open to this account yet');
     const used = new Set((await this.db.whatsapp_number.findMany({ where: { phone_number_id: { in: offered } }, select: { phone_number_id: true } })).map((row) => row.phone_number_id));
     const free = offered.find((id) => !used.has(id));
     if (!free) throw new ConflictException('Every WhatsApp number is in use right now');

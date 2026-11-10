@@ -7,8 +7,11 @@ const clientMock = jest.mocked(client);
 
 const profile = { name: 'Mama Ade Tailors', sells: 'Agbada', currency: 'NGN', priceList: [{ name: 'Agbada', price: 45000 }], languages: ['English'] };
 
+const allowed = 'owner@hypa.test, owner2@hypa.test';
+
 function setup(options: { own?: object | null; used?: string[] } = {}) {
   const db = {
+    user: { findUnique: jest.fn().mockImplementation(async ({ where }) => ({ email: where.id === 'owner-2' ? 'owner2@hypa.test' : where.id === 'stranger' ? 'stranger@x.test' : 'owner@hypa.test' })) },
     whatsapp_number: {
       findFirst: jest.fn().mockResolvedValue(options.own ?? null),
       findMany: jest.fn().mockResolvedValue((options.used ?? []).map((phone_number_id) => ({ phone_number_id }))),
@@ -20,8 +23,23 @@ function setup(options: { own?: object | null; used?: string[] } = {}) {
 }
 
 describe('connect', () => {
-  beforeEach(() => clientMock.readNumber.mockResolvedValue({ id: 'x', display_phone_number: '+1 555 123 4567' }));
-  afterEach(() => delete process.env.WHATSAPP_PHONE_NUMBER_IDS);
+  beforeEach(() => {
+    process.env.WHATSAPP_CONNECT_EMAILS = allowed;
+    clientMock.readNumber.mockResolvedValue({ id: 'x', display_phone_number: '+1 555 123 4567' });
+  });
+  afterEach(() => {
+    delete process.env.WHATSAPP_PHONE_NUMBER_IDS;
+    delete process.env.WHATSAPP_CONNECT_EMAILS;
+  });
+
+  it('gives a number only to a listed account', async () => {
+    process.env.WHATSAPP_PHONE_NUMBER_IDS = '1397541643448933';
+    const { service, db } = setup();
+    await expect(service.connect('stranger', { profile })).rejects.toThrow('not open to this account');
+    delete process.env.WHATSAPP_CONNECT_EMAILS;
+    await expect(service.connect('owner-1', { profile })).rejects.toThrow('not open to this account');
+    expect(db.whatsapp_number.create).not.toHaveBeenCalled();
+  });
 
   it('gives a new business the first number nobody uses, and keeps no credential', async () => {
     process.env.WHATSAPP_PHONE_NUMBER_IDS = '1397541643448933, 1500555000600';

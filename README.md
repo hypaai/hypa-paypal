@@ -420,6 +420,7 @@ WHATSAPP_APP_SECRET=any-local-string
 WHATSAPP_VERIFY_TOKEN=any-local-string
 WHATSAPP_ACCESS_TOKEN=any-local-string
 WHATSAPP_PHONE_NUMBER_IDS=1415999774934646
+WHATSAPP_CONNECT_EMAILS=you@example.com
 WHATSAPP_GRAPH_URL=http://localhost:4010
 ```
 
@@ -427,7 +428,7 @@ Restart the API after changing `.env`.
 
 **B. Set up the business in the app.** Open **Settings → Hypa Bridge → Connect your number**.
 
-- There is no number or token to enter. Tapping **Connect WhatsApp** gives the business the first number in `WHATSAPP_PHONE_NUMBER_IDS` that no other business uses (one number serves one business).
+- There is no number or token to enter. Tapping **Connect WhatsApp** gives the business the first number in `WHATSAPP_PHONE_NUMBER_IDS` that no other business uses (one number serves one business). Only accounts whose email is in `WHATSAPP_CONNECT_EMAILS` (comma separated) can take a number; unset means nobody new can.
 - Under **Replies**, choose whether simple questions are answered automatically. Off means you approve every reply, which is best for a first run.
 - Under **Your business**, fill in the business name, what you sell, currency (a dropdown), the price list, opening hours per day, languages and tone. Use realistic prices; the assistant only quotes the list.
 - Tap **Connect WhatsApp**.
