@@ -15,6 +15,7 @@ import * as Clipboard from 'expo-clipboard';
 import { approvalLabels, formatApprovalAmount, lineTotal } from '@hypa/intelligence-core/payment-approval';
 import { isPayPalUrl, type PaymentLink } from '@hypa/intelligence-core/payment-link';
 import { handPaymentLinkToKeyboard } from '@/lib/keyboard-settings';
+import { registerForPush } from '@/lib/push';
 
 type Approval = PaymentApproval & { status?: CommerceOrder['status'] };
 
@@ -219,7 +220,12 @@ export function PaymentApprovalSheet({
                 <Pressable
                   accessibilityRole="button"
                   disabled={working}
-                  onPress={() => void run(() => approveCommerceOrder(token, order.orderId))}
+                  onPress={() => void run(async () => {
+                    const approved = await approveCommerceOrder(token, order.orderId);
+                    // The merchant is about to wait for a payment, so this is when to ask to be told.
+                    void registerForPush(token, { ask: true }).catch(() => undefined);
+                    return approved;
+                  })}
                   style={({ pressed }) => [
                     styles.primaryAction,
                     { backgroundColor: colors.primary, opacity: working ? 0.5 : pressed ? 0.88 : 1 },
