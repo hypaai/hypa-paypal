@@ -89,6 +89,32 @@ export interface HypaExecutor {
     model?: string;
   }): Promise<{ text: string } & RanOn>;
   wordOfTheDay(): Promise<WordOfTheDay | null>;
+  createOrder(input: {
+    customerName: string;
+    customerContact: string;
+    customerLanguage?: string;
+    amount: string;
+    currency: string;
+    items: { name: string; qty: number; unitPrice: string }[];
+    merchantLanguage?: string;
+  }): Promise<{
+    orderId: string;
+    amount: string;
+    currency: string;
+    status: string;
+    approvalUrl: string;
+    approval?: import('./agent-stream.ts').PaymentApproval;
+  }>;
+  listPaymentMethods(input: { country: string; currency: string }): Promise<{ methods: { id: string; name: string }[] }>;
+  createCheckout(input: { orderId: string }): Promise<{
+    orderId: string;
+    checkoutUrl: string;
+    amount: string;
+    currency: string;
+    customerLanguage: string | null;
+    merchantLanguage: string | null;
+  }>;
+  getPaymentStatus(input: { orderId: string }): Promise<{ orderId: string; orderStatus: string; paymentStatus: string | null }>;
 }
 
 export interface WordOfTheDay {
@@ -109,6 +135,31 @@ const language = (hint: string) =>
     );
 
 const text = (max: number, hint: string) => z.string().min(1).max(max).describe(hint);
+
+const paymentItem = z.object({
+  name: z.string().min(1).max(200),
+  qty: z.number().int().min(1).max(1000),
+  unitPrice: z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/),
+});
+
+function checkLanguagePair(sourceLabel: string | undefined, targetLabel: string) {
+  const source = sourceLabel ? resolveLanguage(sourceLabel) : undefined;
+  const target = resolveLanguage(targetLabel);
+  const unknown = [sourceLabel && !source ? sourceLabel : "", target ? "" : targetLabel].filter(Boolean);
+  if (unknown.length || !target) return { supported: false, models: [], unknown };
+  const runnable = new Set(toolModelChoices("MT"));
+  const models = Object.entries(PRODUCT_MODEL_OPTIONS_BY_CAPABILITY.MT).flatMap(([provider, options]) =>
+    options
+      .filter((option) =>
+        option.languageCodes.includes(target.code) &&
+        (!source || option.languageCodes.includes(source.code)) &&
+        supportsMtPair(provider, source?.name ?? null, target.name),
+      )
+      .map((option) => `${provider}/${option.name}`)
+      .filter((id) => runnable.has(id)),
+  );
+  return { supported: models.length > 0, models };
+}
 
 const audio = z
   .string()
@@ -187,7 +238,176 @@ const CHUNK_MAX = 5_000;
 const lang = (value?: string) => (value ? canonicalLanguage(value) : undefined);
 const voiceName = (value?: string) => (value && value.toLowerCase() !== "auto" ? value : undefined);
 
+// --- payments -----------------------------------------------------------------
+
+/**
+ * The payment steps. They are published as one tool, `paypal`, so a client
+ * enables payments once and gets all five: `action` picks the step, and each
+ * step still validates and runs on its own schema.
+ */
+interface PaymentAction {
+  inputSchema: z.AnyZodObject;
+  outputSchema: z.AnyZodObject;
+  /** `args` is whatever `inputSchema` parsed, so each step reads its own fields. */
+  run: (executor: HypaExecutor, args: any) => Promise<object>;
+}
+
+const PAYMENT_ACTION_NAMES = [
+  "create_order",
+  "list_payment_methods",
+  "create_checkout",
+  "get_payment_status",
+  "send_payment_link",
+] as const;
+
+type PaymentActionName = (typeof PAYMENT_ACTION_NAMES)[number];
+
+const orderId = z.string().min(1).describe("Id of the order, from create_order.");
+const currency = z.string().regex(/^[A-Za-z]{3}$/).describe('ISO 4217 currency code, e.g. "USD".');
+const money = z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/);
+
+const PAYMENT_ACTIONS: Record<PaymentActionName, PaymentAction> = {
+  create_order: {
+    inputSchema: z.object({
+      customerName: z.string().min(1).max(200),
+      customerContact: z.string().min(1).max(320),
+      customerLanguage: language(
+        "Customer's catalog language code or name, used for the payment message sent to them. Defaults to the merchant's language when it is not known.",
+      ).optional(),
+      amount: money,
+      currency,
+      items: z.array(paymentItem).min(1).max(100),
+      merchantLanguage: language(
+        "Merchant's catalog language code or name: the language the merchant is writing or speaking to you in, which is what the approval card and the merchant's replies use. Never ask the merchant for it.",
+      ).optional(),
+    }),
+    outputSchema: z.object({
+      orderId: z.string(),
+      amount: z.string(),
+      currency: z.string(),
+      status: z.string(),
+      approvalUrl: z.string().url(),
+    }),
+    run: (executor, args) => executor.createOrder(args),
+  },
+  list_payment_methods: {
+    inputSchema: z.object({
+      country: z.string().regex(/^[A-Za-z]{2}$/).describe('ISO 3166-1 alpha-2 country code, e.g. "US".'),
+      currency,
+    }),
+    outputSchema: z.object({ methods: z.array(z.object({ id: z.string(), name: z.string() })) }),
+    run: (executor, args) => executor.listPaymentMethods(args),
+  },
+  create_checkout: {
+    inputSchema: z.object({ orderId }),
+    outputSchema: z.object({ orderId: z.string(), checkoutUrl: z.string().url() }),
+    run: async (executor, args) => {
+      const checkout = await executor.createCheckout({ orderId: args.orderId });
+      return { orderId: checkout.orderId, checkoutUrl: checkout.checkoutUrl };
+    },
+  },
+  get_payment_status: {
+    inputSchema: z.object({ orderId }),
+    outputSchema: z.object({
+      orderId: z.string(),
+      orderStatus: z.string(),
+      paymentStatus: z.string().nullable(),
+    }),
+    run: (executor, args) => executor.getPaymentStatus(args),
+  },
+  send_payment_link: {
+    inputSchema: z.object({ orderId }),
+    outputSchema: z.object({
+      orderId: z.string(),
+      checkoutUrl: z.string().url(),
+      message: z.string(),
+      language: z.string(),
+    }),
+    run: async (executor, args) => {
+      const checkout = await executor.createCheckout({ orderId: args.orderId });
+      const customer = checkout.customerLanguage ? resolveLanguage(checkout.customerLanguage) : undefined;
+      const merchant = checkout.merchantLanguage ? resolveLanguage(checkout.merchantLanguage) : undefined;
+      const english = resolveLanguage("en");
+      const requested = customer ?? merchant ?? english;
+      const fallback = merchant ?? english;
+      let target = requested;
+      if (!target || !checkLanguagePair("English", target.name).supported) target = fallback;
+
+      const amountToken = "HYPAPAYAMOUNT7XQ";
+      // The link stays out of translation and on its own last line, so chat apps make it tappable.
+      const template = `Your order is ready. Please complete payment of ${amountToken} here:`;
+      // The checkout already exists, so a translation that fails or loses the amount must not
+      // cost the merchant the link: the message falls back to English and says so.
+      const translated = async (language: { name: string }) => {
+        try {
+          const { translation } = await executor.translate({
+            text: template,
+            sourceLang: "English",
+            targetLang: language.name,
+          });
+          return translation.includes(amountToken) ? translation : undefined;
+        } catch {
+          return undefined;
+        }
+      };
+      let message = template;
+      let written = english;
+      if (target && target.code !== "en") {
+        const text = await translated(target);
+        if (text) {
+          message = text;
+          written = target;
+        } else if (fallback && fallback.code !== "en" && fallback.code !== target.code) {
+          const fallbackText = await translated(fallback);
+          if (fallbackText) {
+            message = fallbackText;
+            written = fallback;
+          }
+        }
+      } else {
+        written = target ?? english;
+      }
+      message = `${message.replaceAll(amountToken, `${checkout.amount} ${checkout.currency}`)}\n${checkout.checkoutUrl}`;
+      return {
+        orderId: checkout.orderId,
+        checkoutUrl: checkout.checkoutUrl,
+        message,
+        language: written?.code ?? "en",
+      };
+    },
+  },
+};
+
+/** Every payment field and result, each optional: `action` decides which apply. */
+const paymentFields = (key: "inputSchema" | "outputSchema"): z.ZodRawShape =>
+  Object.values(PAYMENT_ACTIONS).reduce<z.ZodRawShape>(
+    (shape, action) => ({ ...shape, ...action[key].partial().shape }),
+    {},
+  );
+
 export const HYPA_TOOLS: HypaTool[] = [
+  {
+    name: "paypal",
+    title: "PayPal payments",
+    description:
+      "PayPal payments, in one tool. `action` picks the step: " +
+      '"create_order" (customerName, customerContact, amount, currency, items, optional customerLanguage and merchantLanguage) saves a draft order and returns its merchant approval link — the amount is only a proposal and no checkout can start until the merchant approves it; ' +
+      '"list_payment_methods" (country, currency) lists the payment methods available there; ' +
+      '"create_checkout" (orderId) creates the provider checkout for an approved order; ' +
+      '"get_payment_status" (orderId) reads the order and payment status; ' +
+      '"send_payment_link" (orderId) returns the checkout link and a short payment message in the customer\'s language. ' +
+      "Only the fields the action lists are read; the rest are ignored.",
+    inputSchema: z.object({
+      action: z.enum(PAYMENT_ACTION_NAMES).describe("Which payment step to run."),
+      ...paymentFields("inputSchema"),
+    }),
+    outputSchema: z.object(paymentFields("outputSchema")),
+    run: (executor, args) => {
+      const action = PAYMENT_ACTIONS[args.action as PaymentActionName];
+      const { action: _action, ...rest } = args;
+      return action.run(executor, action.inputSchema.parse(rest));
+    },
+  },
   {
     name: "translate_message",
     title: "Translate a message",
@@ -499,25 +719,7 @@ export const HYPA_TOOLS: HypaTool[] = [
       models: z.array(z.string()).describe("provider/model ids that can translate this pair."),
       unknown: z.array(z.string()).optional().describe("Language labels Hypa doesn't know."),
     }),
-    run: async (_executor, args) => {
-      const source = args.sourceLang ? resolveLanguage(args.sourceLang) : undefined;
-      const target = resolveLanguage(args.targetLang);
-      const unknown = [args.sourceLang && !source ? args.sourceLang : "", target ? "" : args.targetLang].filter(Boolean);
-      if (unknown.length || !target) return { supported: false, models: [], unknown };
-      const runnable = new Set(toolModelChoices("MT"));
-      const models = Object.entries(PRODUCT_MODEL_OPTIONS_BY_CAPABILITY.MT).flatMap(([provider, options]) =>
-        options
-          .filter(
-            (option) =>
-              option.languageCodes.includes(target.code) &&
-              (!source || option.languageCodes.includes(source.code)) &&
-              supportsMtPair(provider, source?.name ?? null, target.name),
-          )
-          .map((option) => `${provider}/${option.name}`)
-          .filter((id) => runnable.has(id)),
-      );
-      return { supported: models.length > 0, models };
-    },
+    run: async (_executor, args) => checkLanguagePair(args.sourceLang, args.targetLang),
   },
   {
     name: "list_models",

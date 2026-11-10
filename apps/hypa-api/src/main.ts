@@ -37,7 +37,17 @@ async function bootstrap() {
 
   app.use('/v2/translate/stt', json({ limit: '15mb' }));
   app.use('/v2/mcp', json({ limit: '15mb' }));
-  app.use(json({ limit: '10mb' }));
+  app.use(
+    json({
+      limit: '10mb',
+      // PayPal webhook signatures are checked against the exact request bytes.
+      verify: (req: Request & { rawBody?: Buffer }, _res, buf) => {
+        if (req.headers['paypal-transmission-id']) {
+          req.rawBody = buf;
+        }
+      },
+    }),
+  );
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     console.log(`[${req.method}]`, req.url);

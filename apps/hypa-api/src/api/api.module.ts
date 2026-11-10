@@ -12,6 +12,7 @@ import { TranslateModule } from './translate/translate.module';
 import { AiModule } from 'src/ai/ai.module';
 import { AgentModule } from './agent/agent.module';
 import { ConversationsModule } from './conversations/conversations.module';
+import { CommerceModule } from './commerce/commerce.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ConversationsModule } from './conversations/conversations.module';
     WebhooksModule,
     AgentModule,
     ConversationsModule,
+    CommerceModule,
   ],
   providers: [
     {

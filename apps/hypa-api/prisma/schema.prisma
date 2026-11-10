@@ -112,9 +112,9 @@ model user {
   last_name  String?
 
   password           String?
-  auth_provider      auth_provider       @default(email)
-  created_at         DateTime            @default(now())
-  updated_at         DateTime            @updatedAt
+  auth_provider      auth_provider        @default(email)
+  created_at         DateTime             @default(now())
+  updated_at         DateTime             @updatedAt
   chats              chat[]
   translations       translation[]
   transcriptions     transcription[]
@@ -124,7 +124,10 @@ model user {
   developerRequests  developer_request[]
   yarnOperations     yarn_tts_operation[]
   wallet             wallet?
-  walletId           String?             @unique
+  walletId           String?              @unique
+  commerceCustomers  commerce_customer[]
+  commerceOrders     commerce_order[]
+  usageCharges       usage_charge[]
   invoices           invoice[]
   customModels       custom_model[]
   customVoices       custom_voice[]
@@ -132,7 +135,7 @@ model user {
   dictionarySearches dictionary_search[]
   benchmarkResults   benchmark_result[]
 
-  referral_code   String    @unique
+  referral_code   String     @unique
   referrals       referral[] @relation("referrer")
   referred_by     referral?  @relation("referred")
   referral_points Int        @default(0)
@@ -279,25 +282,25 @@ model translation {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  model       String?
-  provider    String?
+  model           String?
+  provider        String?
   auto_resolution Json?
-  temperature Float?
-  top_k       Float?
-  top_p       Float?
+  temperature     Float?
+  top_k           Float?
+  top_p           Float?
 
-  translate_history Boolean @default(false)
+  translate_history Boolean  @default(false)
   client_request_id String?
-  bookmarked        Boolean @default(false)
+  bookmarked        Boolean  @default(false)
   liked             Boolean?
-  correction        String? @db.Text()
-  thinking          String? @db.Text()
+  correction        String?  @db.Text()
+  thinking          String?  @db.Text()
 
   userId String
   user   user   @relation(fields: [userId], references: [id])
 
-  @@index([userId, translate_history, created_at])
   @@unique([userId, client_request_id])
+  @@index([userId, translate_history, created_at])
 }
 
 model transcription {
@@ -511,10 +514,10 @@ model api_key {
 
   created_source request_source @default(api)
 
-  user               user                @relation(fields: [userId], references: [id])
+  user               user                 @relation(fields: [userId], references: [id])
   userId             String
-  created_at         DateTime            @default(now())
-  updated_at         DateTime            @updatedAt
+  created_at         DateTime             @default(now())
+  updated_at         DateTime             @updatedAt
   developer_requests developer_request[]
   yarnOperations     yarn_tts_operation[]
 }
@@ -604,4 +607,130 @@ model yarn_tts_operation {
 model mcp_anonymous_budget {
   day            String @id
   reserved_cents Int
+}
+
+// Commerce: merchant orders paid through PayPal
+
+enum commerce_order_status {
+  draft
+  approved
+  paid
+  failed
+  cancelled
+}
+
+enum commerce_order_source {
+  voice
+  text
+  image
+}
+
+enum commerce_order_surface {
+  app
+  keyboard
+  mcp
+}
+
+enum commerce_payment_status {
+  pending
+  paid
+  failed
+  cancelled
+  refunded
+}
+
+model commerce_customer {
+  id         String   @id @default(cuid())
+  merchantId String
+  name       String
+  contact    String
+  language   String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  merchant user             @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  orders   commerce_order[]
+
+  @@unique([merchantId, contact])
+  @@index([merchantId, name])
+}
+
+model commerce_order {
+  id                String                 @id @default(cuid())
+  merchantId        String
+  customerId        String
+  items             Json
+  amount            Decimal                @db.Decimal(20, 6)
+  currency          String
+  status            commerce_order_status  @default(draft)
+  merchant_language String?
+  source            commerce_order_source  @default(text)
+  surface           commerce_order_surface @default(app)
+  agent_request_id  String?
+  created_at        DateTime               @default(now())
+  updated_at        DateTime               @updatedAt
+
+  merchant user                     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  customer commerce_customer        @relation(fields: [customerId], references: [id])
+  payments commerce_payment[]
+  charges  usage_charge[]
+  events   commerce_payment_event[]
+
+  @@unique([merchantId, agent_request_id])
+  @@index([merchantId, created_at])
+  @@index([customerId, created_at])
+}
+
+model commerce_payment {
+  id                       String                  @id @default(cuid())
+  orderId                  String
+  provider                 String
+  provider_ref             String?                 @unique
+  receipt_token            String                  @unique
+  receipt_token_expires_at DateTime
+  checkout_url             String?
+  status                   commerce_payment_status @default(pending)
+  idempotency_key          String                  @unique
+  amount                   Decimal                 @db.Decimal(20, 6)
+  currency                 String
+  created_at               DateTime                @default(now())
+  updated_at               DateTime                @updatedAt
+
+  order  commerce_order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  events commerce_payment_event[]
+
+  @@index([orderId, created_at])
+}
+
+model commerce_payment_event {
+  id         String   @id @default(cuid())
+  event_id   String   @unique
+  orderId    String
+  paymentId  String?
+  event_type String
+  status     String
+  payload    Json
+  created_at DateTime @default(now())
+
+  order   commerce_order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payment commerce_payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, created_at])
+  @@index([paymentId, created_at])
+}
+
+model usage_charge {
+  id         String   @id @default(cuid())
+  userId     String
+  tool       String
+  orderId    String
+  amount     Decimal  @db.Decimal(20, 6)
+  currency   String
+  created_at DateTime @default(now())
+
+  user  user           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order commerce_order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, tool])
+  @@index([userId, created_at])
 }

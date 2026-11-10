@@ -17,8 +17,10 @@ import { McpController } from './mcp.controller';
 import { LensSocketService } from './lens-socket.service';
 import { AuthGuard } from '../auth/auth.guard';
 
+import { CommerceModule } from '../commerce/commerce.module';
+
 @Module({
-  imports: [DeveloperModule, DictionaryModule, AudioModule, TranslateModule],
+  imports: [DeveloperModule, DictionaryModule, AudioModule, TranslateModule, CommerceModule],
   controllers: [AgentController, McpController],
   providers: [
     {

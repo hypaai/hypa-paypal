@@ -30,6 +30,9 @@ importers:
       '@hypa/intelligence-core':
         specifier: workspace:*
         version: link:../../packages/@hypa-intelligence-core
+      '@hypa/paypal-agent':
+        specifier: workspace:*
+        version: link:../../packages/@hypa-paypal-agent
       '@hypa/translate-core':
         specifier: workspace:*
         version: link:../../packages/@hypa-translate-core

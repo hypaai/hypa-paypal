@@ -18,6 +18,7 @@
     "./metro": "./metro.cjs",
     "./model-hosts": "./model-hosts.ts",
     "./models": "./models.ts",
+    "./payments": "./payments.ts",
     "./mt-pair-support": "./mt-pair-support.ts",
     "./prompts": "./prompts.ts",
     "./ranking": "./ranking.ts",

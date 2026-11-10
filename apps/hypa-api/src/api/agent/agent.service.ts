@@ -260,6 +260,7 @@ export class AgentService {
         chatId: live.chatId,
         message: live.status === 'done' ? this.visibleMessage(live.events) : '',
         action: live.status === 'done' ? this.lastDone(live.events)?.action : undefined,
+        approval: this.lastApproval(live.events),
         ...(await this.freshAudio(userId, requestId)),
       };
     }
@@ -267,11 +268,16 @@ export class AgentService {
     if (!run || run.user_id !== userId) throw new NotFoundException();
     if (await this.closeIfStale(requestId, run)) return { status: 'failed', message: '' };
     const stored = run.status === 'done' ? this.doneFromResult(run.result) : null;
+    const assistantMessage = await this.db.message.findFirst({
+      where: { request_id: requestId, role: 'assistant', chat: { userId } },
+      select: { tool_trace: true },
+    });
     return {
       status: run.status,
       chatId: run.chat_id ?? undefined,
       message: run.status === 'done' ? this.messageFromResult(run.result) : '',
       action: stored?.type === 'done' ? stored.action : undefined,
+      approval: this.approvalFromTrace(assistantMessage?.tool_trace),
       ...(await this.freshAudio(userId, requestId)),
     };
   }
@@ -490,6 +496,10 @@ export class AgentService {
       const executor = this.tools.forCaller({
         userId: payerId,
         apiKeyId: apiKey?.id,
+        // Payments act for the signed-in user only; Hypa's anonymous payer is never a merchant.
+        merchantId: userId,
+        surface: input.surface,
+        requestId: input.requestId,
         signal: abort.signal,
         asr: input.asr,
         spend,
@@ -713,6 +723,21 @@ export class AgentService {
         ? (estimate) => this.billing.hasBalance(userId, estimate)
         : undefined,
     })) {
+      // The approval card goes to the app as its own event; the model only sees the order.
+      let approvalPayload: unknown;
+      if (event.type === 'tool_result' && event.name === 'paypal' && event.ok) {
+        const result = event.result;
+        if (result && typeof result === 'object' && !Array.isArray(result)) {
+          const record = result as Record<string, unknown>;
+          approvalPayload = record.approval;
+          if (approvalPayload) {
+            event = {
+              ...event,
+              result: Object.fromEntries(Object.entries(record).filter(([key]) => key !== 'approval')),
+            };
+          }
+        }
+      }
       if (event.type === 'tool_result' && event.ok) {
         const id = (event.result as { audioId?: string } | undefined)?.audioId;
         const clip = id ? clips.get(id) : undefined;
@@ -737,6 +762,11 @@ export class AgentService {
       }
       this.push(job, event);
       trace.push(event.type === 'audio' && event.id ? { ...event, key: clips.get(event.id)?.key } : event);
+      if (approvalPayload && typeof approvalPayload === 'object') {
+        const approvalEvent = { type: 'approval', ...(approvalPayload as Record<string, unknown>) } as AgentEvent;
+        this.push(job, approvalEvent);
+        trace.push(approvalEvent);
+      }
       if (event.type === 'done') done = event;
     }
     if (input.preferAudio && done && !done.speak && payerId) {
@@ -923,6 +953,19 @@ export class AgentService {
     }
   }
 
+  private lastApproval(events: AgentEvent[]): Extract<AgentEvent, { type: 'approval' }> | undefined {
+    return [...events].reverse().find(
+      (event): event is Extract<AgentEvent, { type: 'approval' }> => event.type === 'approval',
+    );
+  }
+
+  private approvalFromTrace(trace: unknown) {
+    if (!Array.isArray(trace)) return undefined;
+    return [...trace].reverse().find((event): event is Extract<AgentEvent, { type: 'approval' }> =>
+      Boolean(event && typeof event === 'object' && (event as { type?: unknown }).type === 'approval'),
+    );
+  }
+
   private lastDone(events: AgentEvent[]) {
     const done = [...events].reverse().find((event) => event.type === 'done');
     return done && done.type === 'done' ? done : undefined;
@@ -1023,6 +1066,9 @@ function storedTrace(
         ...(event.error ? { error: redactText(event.error, hidden) } : {}),
       };
     }
+    if (event.type === 'approval') {
+      return { ...event, customer: { ...event.customer, contact: '' } };
+    }
     if (event.type === 'done') return { ...event, audioUrl: undefined };
     return event;
   });
@@ -1066,6 +1112,7 @@ export interface AnonymousResult {
   message: string;
   action?: 'replace' | 'insert' | 'show';
   audioUrl?: string;
+  approval?: Extract<AgentEvent, { type: 'approval' }>;
 }
 
 function jsonValue(value: unknown): Prisma.InputJsonValue {

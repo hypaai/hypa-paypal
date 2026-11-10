@@ -30,6 +30,8 @@ import { McpAnonymousBudget } from './mcp-anonymous-budget';
 
 // Tools that never charge, so they do not draw on the anonymous daily budget.
 const FREE_TOOLS = new Set([
+  // Payment steps cost nothing to call; the merchant fee is charged only after a payment completes.
+  'paypal',
   'list_voices',
   'word_of_the_day',
   'list_languages',
@@ -177,7 +179,7 @@ export class McpController implements OnModuleInit {
     if (typeof apiKeyHeader === 'string' && apiKeyHeader) {
       const validated = await this.keys.validate(apiKeyHeader);
       if (!validated) throw new UnauthorizedException('An API key is required');
-      return { userId: validated.userId, apiKeyId: validated.apiKeyId };
+      return { userId: validated.userId, apiKeyId: validated.apiKeyId, merchantId: validated.userId, surface: 'mcp' };
     }
     if (req.headers.authorization) {
       const [, jwt] = req.headers.authorization.split(' ') ?? [];
@@ -193,7 +195,7 @@ export class McpController implements OnModuleInit {
       const user = userId ? await this.db.user.findUnique({ where: { id: userId }, select: { id: true } }) : null;
       if (!user) throw new UnauthorizedException('An API key is required');
       const apiKey = await this.billing.findOrCreateUserApiKey(user.id);
-      return { userId: user.id, apiKeyId: apiKey.id };
+      return { userId: user.id, apiKeyId: apiKey.id, merchantId: user.id, surface: 'mcp' };
     }
     const userId = anonymousPayerId();
     if (!userId) throw new UnauthorizedException('An API key is required');

@@ -6,7 +6,10 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./agent-stream": "./src/agent-stream.ts"
+    "./agent-stream": "./src/agent-stream.ts",
+    "./payment-approval": "./src/payment-approval.ts",
+    "./payment-link": "./src/payment-link.ts",
+    "./payment-receipt": "./src/payment-receipt.ts"
   },
   "scripts": {
     "test": "tsx --test tests/*.test.ts",

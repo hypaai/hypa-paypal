@@ -21,7 +21,8 @@ let todaysWord: { word: string; meaning: string; language: string; voice: string
   audioUrl: "https://example.com/wotd.wav",
 };
 
-function recordingExecutor() {
+/** Records every basic step a tool runs. */
+function recordingExecutor(customerLanguage = "yo") {
   const steps: { step: string; input: Record<string, unknown> }[] = [];
   const executor: HypaExecutor = {
     translate: async (input) => {
@@ -48,6 +49,44 @@ function recordingExecutor() {
       steps.push({ step: "wordOfTheDay", input: {} });
       return todaysWord;
     },
+    createOrder: async (input) => {
+      steps.push({ step: "createOrder", input });
+      return {
+        orderId: "order-1",
+        amount: input.amount,
+        currency: input.currency,
+        status: "draft",
+        approvalUrl: "https://hypaintelligence.com/orders/order-1/approve",
+        approval: {
+          orderId: "order-1",
+          amount: input.amount,
+          currency: input.currency,
+          fee: { amount: "0.01", currency: "USD" },
+          customer: { name: input.customerName, contact: input.customerContact, language: input.customerLanguage ?? null },
+          items: input.items,
+          merchantLanguage: input.merchantLanguage ?? "en",
+        },
+      };
+    },
+    listPaymentMethods: async (input) => {
+      steps.push({ step: "listPaymentMethods", input });
+      return { methods: [{ id: "paypal", name: "PayPal" }] };
+    },
+    createCheckout: async (input) => {
+      steps.push({ step: "createCheckout", input });
+      return {
+        orderId: input.orderId,
+        checkoutUrl: "https://www.paypal.com/checkout/order-1",
+        amount: "12.50",
+        currency: "USD",
+        customerLanguage,
+        merchantLanguage: "en",
+      };
+    },
+    getPaymentStatus: async (input) => {
+      steps.push({ step: "getPaymentStatus", input });
+      return { orderId: input.orderId, orderStatus: "approved", paymentStatus: "pending" };
+    },
   };
   return { executor, steps };
 }
@@ -57,6 +96,7 @@ describe("Hypa tools", () => {
     assert.deepEqual(
       HYPA_TOOLS.map((entry) => entry.name),
       [
+        "paypal",
         "translate_message",
         "translate_document",
         "translate_and_speak",
@@ -90,6 +130,68 @@ describe("Hypa tools", () => {
     assert.ok(props("translate_message").model);
     assert.ok(props("speech_to_text").sourceLang);
     assert.equal(props("look_up_term").model, undefined);
+  });
+
+  it("creates draft orders from a proposed amount and does not accept a provider override", async () => {
+    const { executor, steps } = recordingExecutor();
+    const result = await runHypaTool(tool("paypal"), executor, {
+      action: "create_order",
+      customerName: "Ada",
+      customerContact: "ada@example.com",
+      amount: "25.00",
+      currency: "USD",
+      items: [{ name: "Tote", qty: 1, unitPrice: "25.00" }],
+      provider: "attacker-provider",
+    });
+    assert.equal(result.status, "draft");
+    assert.equal(steps[0].input.provider, undefined);
+  });
+
+  it("lists payment methods by country and currency", async () => {
+    const { executor } = recordingExecutor();
+    assert.deepEqual(
+      await runHypaTool(tool("paypal"), executor, { action: "list_payment_methods", country: "US", currency: "USD" }),
+      { methods: [{ id: "paypal", name: "PayPal" }] },
+    );
+  });
+
+  it("uses only the approved order ID when creating checkout and reading status", async () => {
+    const { executor, steps } = recordingExecutor();
+    await runHypaTool(tool("paypal"), executor, {
+      action: "create_checkout", orderId: "order-1", amount: "0.01", provider: "forged-provider",
+    });
+    await runHypaTool(tool("paypal"), executor, {
+      action: "get_payment_status", orderId: "order-1", provider: "forged-provider",
+    });
+    assert.deepEqual(steps.map((step) => step.input), [{ orderId: "order-1" }, { orderId: "order-1" }]);
+  });
+
+  it("translates payment links while retaining the exact amount and URL", async () => {
+    const { executor, steps } = recordingExecutor();
+    const result = await runHypaTool(tool("paypal"), executor, { action: "send_payment_link", orderId: "order-1" });
+    assert.match(String(result.message), /12\.50 USD/);
+    assert.match(String(result.message), /\nhttps:\/\/www\.paypal\.com\/checkout\/order-1$/);
+    assert.equal(result.language, "yo");
+    assert.ok(steps.some((step) => step.step === "translate"));
+  });
+
+  it("prepares customer-language messages for Yoruba, Hausa and French", async () => {
+    for (const code of ["yo", "ha", "fr"]) {
+      const { executor } = recordingExecutor(code);
+      const result = await runHypaTool(tool("paypal"), executor, { action: "send_payment_link", orderId: "order-1" });
+      assert.equal(result.language, code);
+      assert.match(String(result.message), /12\.50 USD/);
+      assert.match(String(result.message), /https:\/\/www\.paypal\.com\/checkout\/order-1/);
+    }
+  });
+
+  it("validates each payment action against its own schema", async () => {
+    const { executor, steps } = recordingExecutor();
+    await assert.rejects(
+      () => runHypaTool(tool("paypal"), executor, { action: "create_order", customerName: "Ada" }),
+    );
+    await assert.rejects(() => runHypaTool(tool("paypal"), executor, { action: "refund_order" }));
+    assert.deepEqual(steps, []);
   });
 
   it("builds combos from the basic steps and passes each step its own model", async () => {

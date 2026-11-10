@@ -13,7 +13,8 @@ import {
 } from '@hypa/translate-core';
 import type { ModelCapability } from '@hypa/config/models';
 import { AUTO_CAPABILITIES, toolModelChoices, type HypaExecutor, type RanOn } from '@hypa/intelligence-core';
-import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Optional, UnauthorizedException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { DictionaryController } from '../dictionary/dictionary.controller';
 import { WordOfTheDayService } from '../dictionary/word-of-the-day.service';
 import { TranslateController } from '../translate/translate.controller';
@@ -23,11 +24,19 @@ import { DeveloperSharedService } from '../developer/providers/shared.service';
 import type { AiUsage } from 'src/ai/ai.types';
 import { detectAudioMime } from 'src/libs/shared/audio-mime';
 import type { SpendCap } from 'src/libs/shared/spend-cap';
+import { CommerceService } from '../commerce/commerce.service';
+import { getToolFee } from '@hypa/config/payments';
 
 export interface ToolCaller {
   /** Missing for anonymous callers, who may only run tools that need no account (see ANONYMOUS_TOOLS). */
   userId?: string;
   apiKeyId?: string;
+  /** Set only for a signed-in account; Hypa's anonymous payer is never a merchant. */
+  merchantId?: string;
+  /** Client surface that created the order. */
+  surface?: 'app' | 'keyboard' | 'mcp';
+  /** Stable id for a single agent turn; makes a retried create_order idempotent. */
+  requestId?: string;
   signal?: AbortSignal;
   asr?: { provider: string; model: string };
   onStep?: (step: { cost: number } & RanOn) => void | Promise<void>;
@@ -37,6 +46,17 @@ export interface ToolCaller {
 export function anonymousPayerId(): string | undefined {
   return process.env.AGENT_ANONYMOUS_USER_ID?.trim() || undefined;
 }
+
+/**
+ * One agent turn can save several orders, so a saved order is identified by the turn and by what
+ * was asked for. The same call sent again finds its order; a different customer or amount in the
+ * same turn gets its own, instead of being answered with the first.
+ */
+const orderFingerprint = (input: { customerContact: string; amount: string; currency: string; items: unknown }) =>
+  createHash('sha256')
+    .update(JSON.stringify([input.customerContact, input.amount, input.currency.toUpperCase(), input.items]))
+    .digest('hex')
+    .slice(0, 12);
 
 export type ToolChoice = { provider: string; model?: string } | null;
 
@@ -84,6 +104,7 @@ export class HypaToolExecutor {
     private readonly billing: DeveloperSharedService,
     private readonly words: WordOfTheDayService,
     @Optional() @Inject(AGENT_CLIENTS) private readonly clients?: AgentClients,
+    @Optional() private readonly commerce?: CommerceService,
   ) {}
 
   forCaller(caller: ToolCaller): HypaExecutor {
@@ -105,6 +126,58 @@ export class HypaToolExecutor {
       );
     };
     return {
+      createOrder: async (input) => {
+        const merchantId = this.requireMerchant(caller);
+        const commerce = this.requireCommerce();
+        commerce.getApprovalUrl('pending');
+        const fee = getToolFee('paid_order');
+        if (!fee) throw new BadRequestException('Payment fee is not configured');
+        const order = await commerce.createOrder(merchantId, {
+          customer: {
+            name: input.customerName,
+            contact: input.customerContact,
+            language: input.customerLanguage,
+          },
+          items: input.items,
+          amount: input.amount,
+          currency: input.currency,
+          merchantLanguage: input.merchantLanguage,
+          surface: caller.surface ?? 'app',
+          agentRequestId: caller.requestId && `${caller.requestId}:${orderFingerprint(input)}`,
+        });
+        const items = Array.isArray(order.items) ? order.items as { name: string; qty: number; unitPrice: string }[] : [];
+        const customer = order.customer;
+        return {
+          orderId: order.id,
+          amount: order.amount.toString(),
+          currency: order.currency,
+          status: order.status,
+          approvalUrl: commerce.getApprovalUrl(order.id),
+          ...(caller.surface !== 'mcp' ? {
+            approval: {
+              orderId: order.id,
+              amount: order.amount.toString(),
+              currency: order.currency,
+              fee: { amount: fee.amount, currency: fee.currency },
+              customer: { name: customer.name, contact: customer.contact, language: customer.language },
+              items,
+              merchantLanguage: order.merchant_language ?? 'en',
+            }
+          } : {}),
+        };
+      },
+      listPaymentMethods: async (input) => {
+        this.requireMerchant(caller);
+        return this.requireCommerce().listPaymentMethods(input.country, input.currency);
+      },
+      createCheckout: async (input) => {
+        const merchantId = this.requireMerchant(caller);
+        return this.requireCommerce().createCheckout(merchantId, input.orderId);
+      },
+      getPaymentStatus: async (input) => {
+        const merchantId = this.requireMerchant(caller);
+        return this.requireCommerce().getPaymentStatus(merchantId, input.orderId);
+      },
       translate: (input) => run('MT', input.model, (next) => this.translate(next, input)),
       speak: (input) => run('TTS', input.model, (next) => this.speak(next, input)),
       transcribe: (input) => run('ASR', input.model, (next) => this.transcribe(next, input)),
@@ -118,6 +191,18 @@ export class HypaToolExecutor {
       wordOfTheDay: () =>
         withRequestDeadline(caller.signal, TEXT_TOOL_TIMEOUT_MS, 'Word of the day', () => this.words.getWordOfTheDay()),
     };
+  }
+
+  private requireMerchant(caller: ToolCaller) {
+    if (!caller.merchantId) {
+      throw new UnauthorizedException('Payment tools require a signed-in merchant');
+    }
+    return caller.merchantId;
+  }
+
+  private requireCommerce() {
+    if (!this.commerce) throw new BadRequestException('Commerce tools are unavailable');
+    return this.commerce;
   }
 
   async translateForCaller(

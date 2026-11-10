@@ -42,6 +42,16 @@ export interface ModelStep {
 
 export type AgentEvent =
   | { type: 'message_ids'; userMessageId: string; assistantMessageId: string; sentAt?: string }
+  | {
+      type: 'approval';
+      orderId: string;
+      amount: string;
+      currency: string;
+      fee: { amount: string; currency: string };
+      customer: { name: string; contact: string; language: string | null };
+      items: { name: string; qty: number; unitPrice: string }[];
+      merchantLanguage: string;
+    }
   | { type: 'transcript'; text: string }
   | { type: 'tool_call'; id: string; name: string; args: unknown }
   | {
@@ -108,6 +118,9 @@ async function* finishAudio(
     };
   }
 }
+
+/** Every payment step runs under this one tool, and each retries once. */
+const PAYMENT_TOOL = 'paypal';
 
 const emptyUsage = (): Usage => ({
   prompt_tokens: 0,
@@ -300,7 +313,14 @@ export async function* runAgentLoop(input: {
         };
       }
       try {
-        const body = await input.runTool(call.name, args);
+        let body: unknown;
+        try {
+          body = await input.runTool(call.name, args);
+        } catch (firstError) {
+          // Payment steps are idempotent per turn, so one retry cannot create a second order.
+          if (call.name !== PAYMENT_TOOL || input.signal?.aborted) throw firstError;
+          body = await input.runTool(call.name, args);
+        }
         return { call, body, ok: true as const, error: undefined };
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Tool failed';

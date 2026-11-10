@@ -16,7 +16,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.cjs.json && node -e \"require('node:fs').writeFileSync('dist/cjs/package.json', JSON.stringify({type:'commonjs'}))\"",
     "prepublishOnly": "npm run build",
-    "demo": "tsx demo.ts"
+    "demo": "tsx demo.ts",
+    "prepare": "npm run build",
+    "check-types": "tsc --noEmit -p tsconfig.json"
   },
   "files": [
     "dist",

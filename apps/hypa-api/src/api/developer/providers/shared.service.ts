@@ -291,6 +291,35 @@ export class DeveloperSharedService {
     await this.userQueue.deductBalance({ userId, amount: cost });
   }
 
+  /** Applies a durable commerce fee in the caller's transaction. */
+  async debitCommerceFee(
+    tx: Prisma.TransactionClient,
+    input: { userId: string; orderId: string; tool: string; amount: string; currency: string },
+  ) {
+    if (input.currency !== 'USD') {
+      throw new Error('Commerce fees currently require a USD wallet');
+    }
+    const amount = new Prisma.Decimal(input.amount);
+    const wallet = await tx.wallet.upsert({
+      where: { userId: input.userId },
+      update: { balance: { decrement: amount } },
+      create: { userId: input.userId, balance: amount.negated() },
+    });
+    await tx.usage_charge.create({
+      data: {
+        userId: input.userId,
+        tool: input.tool,
+        orderId: input.orderId,
+        amount,
+        currency: input.currency,
+      },
+    });
+    return {
+      balance: wallet.balance,
+      warning: wallet.balance.lessThan(0) ? 'LOW_BALANCE_WARNING' : undefined,
+    };
+  }
+
   async refundBalance(userId: string, amount: number, reason?: string) {
     await this.userQueue.refundBalance({ userId, amount, reason });
   }
