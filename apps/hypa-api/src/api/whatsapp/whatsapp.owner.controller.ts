@@ -4,6 +4,7 @@ import { type UserType } from 'src/db-types';
 import { User } from 'src/libs/shared/decorator/user.decorator';
 import { AuthGuard } from '../auth/auth.guard';
 import { WhatsappOwnerService } from './whatsapp.owner.service';
+import { WhatsappPaymentService } from './whatsapp.payment';
 import { WhatsappService } from './whatsapp.service';
 
 class ConnectNumberDto {
@@ -35,6 +36,7 @@ export class WhatsappOwnerController {
   constructor(
     private readonly owner: WhatsappOwnerService,
     private readonly bridge: WhatsappService,
+    private readonly payment: WhatsappPaymentService,
   ) {}
 
   @Get('number')
@@ -78,6 +80,12 @@ export class WhatsappOwnerController {
   async send(@Param('id') id: string, @Body() body: OptionalTextDto, @User() user: UserType) {
     const draft = await this.bridge.send(user.id, id, body.text);
     return { status: draft.status };
+  }
+
+  @Post('orders/:id/payment-link')
+  async paymentLink(@Param('id') id: string, @User() user: UserType) {
+    await this.payment.resendLink(user.id, id);
+    return { sent: true };
   }
 
   @Post('drafts/:id/discard')

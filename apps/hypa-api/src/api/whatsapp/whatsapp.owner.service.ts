@@ -114,11 +114,14 @@ export class WhatsappOwnerService {
       ...written.map((message) => ({ id: message.id, role: message.role, content: message.content, createdAt: message.created_at })),
       ...sent.map((draft) => ({ id: draft.id, role: 'assistant', content: draft.text, createdAt: draft.sent_at ?? draft.created_at })),
     ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const linked = await this.db.whatsapp_order.findMany({ where: { threadId: thread.id }, orderBy: { created_at: 'asc' }, select: { order_id: true, link_sent_at: true } });
+    const orders = linked.length ? await this.db.commerce_order.findMany({ where: { id: { in: linked.map((row) => row.order_id) } }, select: { id: true, status: true } }) : [];
     return {
       id: thread.id,
       customerName: thread.customer_name,
       mode: thread.mode,
       order: thread.order,
+      payments: linked.map((row) => ({ orderId: row.order_id, linkSent: row.link_sent_at !== null, status: orders.find((order) => order.id === row.order_id)?.status ?? 'draft' })),
       messages,
       drafts: thread.drafts.map((draft) => ({
         id: draft.id,

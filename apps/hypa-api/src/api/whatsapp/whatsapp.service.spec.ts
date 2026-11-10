@@ -136,7 +136,7 @@ describe('handle: text', () => {
     expect(call.systemInstruction).toContain('Mama Ade Tailors');
     expect(call.systemInstruction).toContain('- Agbada: 45000');
     expect(call.toolNames).not.toContain('paypal');
-    expect(call.extraTools.map((tool: { name: string }) => tool.name)).toEqual(['record_order', 'ask_owner']);
+    expect(call.extraTools.map((tool: { name: string }) => tool.name)).toEqual(['create_order', 'ask_owner']);
   });
 
   it('leaves the reply as a draft for the owner by default and sends nothing', async () => {
@@ -189,7 +189,7 @@ describe('orders and prices', () => {
   it('saves the recorded order on the thread and holds the reply for the owner even with auto-reply on', async () => {
     const { service, db } = setup({
       numberRow: { auto_reply: true },
-      toolCalls: async (tools) => void (await runHypaTool(tools.find((tool) => tool.name === 'record_order'), {} as never, order)),
+      toolCalls: async (tools) => void (await runHypaTool(tools.find((tool) => tool.name === 'create_order'), {} as never, order)),
     });
     await service.handle(text());
     expect(db.whatsapp_thread.update).toHaveBeenCalledWith({ where: { id: 'thread-1' }, data: { order: expect.objectContaining({ dueDate: 'Saturday' }) } });
@@ -201,7 +201,7 @@ describe('orders and prices', () => {
     const { service, db } = setup({
       toolCalls: async (tools) => {
         await expect(
-          runHypaTool(tools.find((tool) => tool.name === 'record_order'), {} as never, { items: [{ name: 'Agbada', qty: 2, unitPrice: 30000 }] }),
+          runHypaTool(tools.find((tool) => tool.name === 'create_order'), {} as never, { items: [{ name: 'Agbada', qty: 2, unitPrice: 30000 }] }),
         ).rejects.toThrow('45000');
       },
     });

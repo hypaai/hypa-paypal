@@ -9,6 +9,7 @@ import { resolveLanguage } from '@hypa/intelligence-core';
 import { PayPalProvider } from '@hypa/paypal-agent';
 import { payments } from '@hypa/config/payments';
 import { DbService } from 'src/libs/db/db.service';
+import { OrderEvents } from '../webhooks/order-events';
 import { PayPalWebhookService } from '../webhooks/paypal-webhook.service';
 import type {
   CreateCommerceCustomerInput,
@@ -31,6 +32,7 @@ export class CommerceService {
   constructor(
     private readonly db: DbService,
     private readonly settlement: PayPalWebhookService,
+    private readonly events: OrderEvents,
   ) {}
 
   /** The published PayPal adapter, built on first use so tests can stub fetch. */
@@ -351,6 +353,9 @@ export class CommerceService {
         },
       });
     }
+    // A payer who started in the app comes back into it; a WhatsApp customer may not have the app.
+    const whatsappOrder = await this.db.whatsapp_order.findUnique({ where: { order_id: order.id }, select: { order_id: true } });
+    const fromApp = order.surface === 'app' && !whatsappOrder ? '&from=app' : '';
     let checkout: { providerRef: string; checkoutUrl: string };
     try {
       checkout = await this.paypal().createCheckout({
@@ -360,7 +365,7 @@ export class CommerceService {
         items,
         // PayPal's page only has some languages; without one it uses its own default.
         locale: (payments.methods.paypal.locales as Record<string, string>)[order.customer.language ?? ''],
-        returnUrl: `${frontendUrl}/pay/${encodeURIComponent(order.id)}?receipt=${encodeURIComponent(payment.receipt_token)}`,
+        returnUrl: `${frontendUrl}/pay/${encodeURIComponent(order.id)}?receipt=${encodeURIComponent(payment.receipt_token)}${fromApp}`,
         cancelUrl: `${frontendUrl}/pay/${encodeURIComponent(order.id)}?checkout=cancel`,
         idempotencyKey,
       });
@@ -442,7 +447,7 @@ export class CommerceService {
     orderId: string,
     next: 'approved' | 'cancelled',
   ) {
-    return this.db.$transaction(async (tx) => {
+    const updated = await this.db.$transaction(async (tx) => {
       const order = await tx.commerce_order.findFirst({
         where: { id: orderId, merchantId },
       });
@@ -470,6 +475,8 @@ export class CommerceService {
       });
       return updated;
     });
+    if (next === 'approved') await this.events.emit('approved', orderId);
+    return updated;
   }
 
   listPaymentMethods(country: string, currency: string) {

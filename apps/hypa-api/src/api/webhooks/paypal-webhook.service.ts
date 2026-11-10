@@ -10,6 +10,7 @@ import { PayPalProvider } from '@hypa/paypal-agent';
 import { DbService } from 'src/libs/db/db.service';
 import { DeveloperSharedService } from '../developer/providers/shared.service';
 import { createHash } from 'node:crypto';
+import { OrderEvents } from './order-events';
 
 
 type PayPalStatus = 'pending' | 'paid' | 'failed';
@@ -21,6 +22,7 @@ export class PayPalWebhookService {
   constructor(
     private readonly db: DbService,
     private readonly shared: DeveloperSharedService,
+    private readonly events: OrderEvents,
   ) {}
 
   async handle(headers: Record<string, string | string[] | undefined>, rawBody: string | Buffer) {
@@ -183,6 +185,7 @@ export class PayPalWebhookService {
         return {
           received: true,
           status: 'paid',
+          orderId: payment.orderId,
           merchantId: payment.order.merchantId,
           ...(warning ? { warning } : {}),
         };
@@ -201,6 +204,7 @@ export class PayPalWebhookService {
         } catch {
           Logger.warn('Commerce wallet balance cache invalidation failed');
         }
+        if ('orderId' in result && typeof result.orderId === 'string') await this.events.emit('paid', result.orderId);
         return {
           received: true,
           status: 'paid',

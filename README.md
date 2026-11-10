@@ -347,7 +347,7 @@ Without the webhook, you can still create checkouts and pay; the order just will
 
 ## 8. Start the web approval page
 
-`FRONTEND_URL` is where merchants can review and approve an order in the browser (`/orders/:id/approve`) and where customers land after paying (`/pay/:id`).
+`FRONTEND_URL` is where merchants can review and approve an order in the browser (`/orders/:id/approve`) and where customers land after paying (`/pay/:id`). An order made in the app (not a WhatsApp customer's) returns to `/pay/:id?receipt=<token>&from=app`; have that page open `hypaintelligence://pay/<id>?receipt=<token>` on a phone, and the app's `pay/[id]` screen shows the receipt. It must be a public HTTPS URL, not `localhost`, to be reachable from a phone.
 
 ```bash
 pnpm --filter hypa-intelligence dev
@@ -409,6 +409,7 @@ Hypa Bridge lets a small business answer WhatsApp customers with an assistant th
 - With **Answer simple questions automatically** off, every reply is a **draft** the owner sends, edits or discards in the app. With it on, simple answers go out directly; orders, hand-offs and unlisted prices always wait for the owner.
 - The owner can reply by hand (**Write a reply**), which pauses the assistant, then tap **Hand back** to let it continue.
 - WhatsApp only allows free-form messages within 24 hours of the customer's last message. After that, sending a draft uses an approved message template (`WHATSAPP_QUOTE_TEMPLATE`, default `quote_ready`).
+- An order the assistant records becomes a draft PayPal order and appears as an approval card in the customer's thread. The customer is told the business is confirming. Nothing payable is sent until the owner approves it; then the customer gets the PayPal link in their language (amount, currency and URL unchanged), and a receipt once PayPal's webhook marks it paid. A repeated WhatsApp message makes one order and a repeated webhook sends one receipt. Outside the 24-hour window the approved templates `invoice_ready` and `payment_received` are used (`WHATSAPP_PAYMENT_LINK_TEMPLATE`, `WHATSAPP_PAYMENT_RECEIPT_TEMPLATE`; `WHATSAPP_TEMPLATE_LANGUAGES` lists the languages they are approved in, English otherwise). PayPal does not support NGN, GHS or XOF, so a business in those currencies arranges payment itself; use USD, EUR or GBP for the demo.
 - Replies are billed to the owner's wallet. If it runs low, the assistant pauses and the app shows an alert.
 
 ### Step by step
@@ -493,6 +494,10 @@ Hypa runs one Meta app and its own WhatsApp number(s). Businesses never handle a
 3. Expose your API publicly (for example `ngrok http 5678`). In Meta's **WhatsApp → Configuration**, set the callback to `https://<your-public-url>/v2/whatsapp/webhook`, use the same verify token, and subscribe to `messages`.
 4. In the app, open **Settings → Hypa Bridge**, fill in the business and tap **Connect WhatsApp**. Message the Meta test number from the phone you added in step 1.
 5. Create and get approved an `en` message template named `quote_ready` (or set `WHATSAPP_QUOTE_TEMPLATE` and `WHATSAPP_QUOTE_TEMPLATE_LANGUAGE`). It is used for replies sent after the 24-hour window. The Meta test number can only message phones you added in step 1.
+
+## WhatsApp order to PayPal in one file
+
+[`examples/whatsapp`](./examples/whatsapp/README.md) is a single-file bot that wires WhatsApp to the PayPal adapter, sandbox only, with keys from the environment: order, merchant approval, PayPal link, receipt.
 
 ## Try the PayPal adapter on its own
 

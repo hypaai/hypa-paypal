@@ -85,5 +85,13 @@ export const sendAudio = (phoneNumberId: string, to: string, mediaId: string) =>
 export const sendImage = (phoneNumberId: string, to: string, mediaId: string) => send(phoneNumberId, { to, type: 'image', image: { id: mediaId } });
 
 /** The only kind of message WhatsApp lets a business start after the 24-hour window has closed. */
-export const sendTemplate = (phoneNumberId: string, to: string, template: { name: string; language: string }) =>
-  send(phoneNumberId, { to, type: 'template', template: { name: template.name, language: { code: template.language } } });
+export const sendTemplate = (phoneNumberId: string, to: string, template: { name: string; language: string; parameters?: string[] }) =>
+  send(phoneNumberId, {
+    to,
+    type: 'template',
+    template: {
+      name: template.name,
+      language: { code: template.language },
+      ...(template.parameters?.length ? { components: [{ type: 'body', parameters: template.parameters.map((text) => ({ type: 'text', text })) }] } : {}),
+    },
+  });

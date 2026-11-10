@@ -782,9 +782,22 @@ model whatsapp_thread {
   updated_at      DateTime        @updatedAt
 
   drafts whatsapp_draft[]
+  orders whatsapp_order[]
 
   @@unique([numberId, customer_hash])
   @@index([numberId, updated_at])
+}
+
+/// A payable order made in a WhatsApp thread, and which of its two messages (the payment link, the receipt) the customer has had.
+model whatsapp_order {
+  order_id        String          @id
+  thread          whatsapp_thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  threadId        String
+  link_sent_at    DateTime?
+  receipt_sent_at DateTime?
+  created_at      DateTime        @default(now())
+
+  @@index([threadId])
 }
 
 // What the agent wants to send a customer, until the owner sends, edits or drops it.
