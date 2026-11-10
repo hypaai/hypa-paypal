@@ -20,6 +20,7 @@ import {
   runHypaTool,
   toFunctionTools,
   type FunctionTool,
+  type HypaTool,
 } from '@hypa/intelligence-core';
 import { parseBuffer } from 'music-metadata';
 import { Prisma } from 'src/generated/prisma/client';
@@ -76,6 +77,8 @@ export interface OpenAgentInput {
   ephemeral?: boolean;
   input: string;
   toolNames?: string[];
+  /** Tools only this caller has, on top of `toolNames`. They stay off the shared list, so `/v2/mcp` never offers them. */
+  extraTools?: HypaTool[];
   systemInstruction?: string;
   modelOptions?: AgentModelOptions;
   provider: string;
@@ -132,6 +135,7 @@ export class AgentService {
       asr: input.asr ?? null,
       ...(input.history?.length ? { history: input.history } : {}),
       ...(input.toolNames !== undefined ? { toolNames: [...new Set(input.toolNames)].sort() } : {}),
+      ...(input.extraTools?.length ? { extraTools: input.extraTools.map((tool) => tool.name).sort() } : {}),
       ...(input.systemInstruction !== undefined ? { systemInstruction: input.systemInstruction } : {}),
       ...(input.modelOptions ? { modelOptions: input.modelOptions } : {}),
     });
@@ -453,9 +457,10 @@ export class AgentService {
         });
       }
     };
-    const selectedTools = input.toolNames === undefined
-      ? HYPA_TOOLS
-      : HYPA_TOOLS.filter((tool) => input.toolNames!.includes(tool.name));
+    const selectedTools = [
+      ...(input.toolNames === undefined ? HYPA_TOOLS : HYPA_TOOLS.filter((tool) => input.toolNames!.includes(tool.name))),
+      ...(input.extraTools ?? []),
+    ];
     // With no payer an agent run has no tools, except those the server itself asked for by name and that
     // need no account. The public POST /v2/agent never passes toolNames, so its anonymous runs are unchanged.
     const anonymousMayRun = (name: string) => !payerId && input.toolNames !== undefined && ANONYMOUS_TOOLS.has(name);
@@ -489,7 +494,7 @@ export class AgentService {
       if ((!payerId && !anonymousMayRun(name)) || !this.tools) {
         throw new Error('Tools are not available for this request');
       }
-      const tool = HYPA_TOOLS.find((entry) => entry.name === name);
+      const tool = selectedTools.find((entry) => entry.name === name);
       if (!tool) throw new Error(`Unknown tool ${name}`);
       const apiKey = payerId ? await this.billing.findOrCreateUserApiKey(payerId) : undefined;
       let cost = 0;

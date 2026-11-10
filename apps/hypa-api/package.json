@@ -9,7 +9,9 @@
     "dev": "pnpm prisma:generate && nest start --watch",
     "start": "node dist/main",
     "check-types": "pnpm prisma:generate && tsc --noEmit",
-    "db:studio": "prisma studio"
+    "whatsapp:sim": "tsx scripts/whatsapp-sim.ts",
+    "db:studio": "prisma studio",
+    "test": "jest"
   },
   "dependencies": {
     "@hypa/config": "workspace:*",
@@ -61,12 +63,41 @@
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
     "@types/express": "^5.0.0",
+    "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.10.7",
     "@types/ws": "^8.18.1",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.2.5",
     "typescript": "^5.7.3"
   },
   "engines": {
     "node": ">=22"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": [
+        "ts-jest",
+        {
+          "tsconfig": {
+            "module": "commonjs",
+            "moduleResolution": "node",
+            "resolvePackageJsonExports": false
+          }
+        }
+      ]
+    },
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1",
+      "^src/(.*)$": "<rootDir>/$1",
+      "^@hypa/paypal-agent$": "<rootDir>/../../../packages/@hypa-paypal-agent/src/index.ts"
+    }
   }
 }

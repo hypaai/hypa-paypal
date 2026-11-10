@@ -39,7 +39,7 @@ type PromptConfig = {
     providers: Record<string, ProviderPrompt>;
   };
   LAB: Record<string, Record<string, string>>;
-  agent?: { system: string };
+  agent?: { system: string; bridge?: string };
 };
 
 const promptConfig = prompts as PromptConfig;
@@ -90,6 +90,11 @@ export function getMtThinkingPrompt(): ProviderPrompt {
 
 export function getAgentSystemPrompt(): string {
   return promptConfig.agent?.system ?? "";
+}
+
+/** The WhatsApp bridge agent's instructions, with {businessName}, {priceList} and the other placeholders left to fill. */
+export function getBridgePrompt(): string {
+  return promptConfig.agent?.bridge ?? "";
 }
 
 export function getNonHypaMtThinkingPrompt(): PromptMessageTemplate[] {

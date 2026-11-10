@@ -7,6 +7,7 @@ import {
   Clock3,
   Globe,
   Languages,
+  MessageCircle,
   Mic,
   Scaling,
   Server,
@@ -17,7 +18,7 @@ import {
   Volume2,
   WandSparkles,
 } from 'lucide-react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { isHypaKeyboardEnabled, showInputMethodPicker } from 'hypa-keyboard-input-method-picker';
 
 import { MODELS, getAssistantModels } from '@hypa/config/models';
@@ -551,6 +552,25 @@ const Settings = () => {
                 hasChevron
                 isLast
                 onPress={() => setAssistantModalVisible(true)}
+              />
+            </View>
+          </View>
+
+          {/* Hypa Bridge */}
+          <View className="mb-4">
+            <Text
+              className="px-2 pb-3 text-[12px] tracking-[1.5px] text-zinc-400 uppercase dark:text-zinc-500"
+              style={{ fontFamily: FONTS.main.medium }}>
+              Hypa Bridge
+            </Text>
+            <View className="mb-8 rounded-3xl border border-zinc-100 bg-white px-3 py-1 dark:border-zinc-800 dark:bg-zinc-950">
+              <SettingsItem
+                icon={MessageCircle}
+                title="WhatsApp customers"
+                value="Answer your customers on WhatsApp"
+                hasChevron
+                isLast
+                onPress={() => router.push('/bridge')}
               />
             </View>
           </View>

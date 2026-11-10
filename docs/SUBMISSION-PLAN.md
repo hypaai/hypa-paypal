@@ -85,6 +85,10 @@ One commit per group, in this order:
     - `order-approval-store.ts`, `lib/order-approval.ts`
 27. **Full flow test:** follow `05-agent-flow-manual-tests.md` in sandbox (voice, photo, text → approval → PayPal → paid message).
 
+## Hypa Bridge (added Nov 10)
+
+The WhatsApp business assistant is ported from hypa-v2 on branch `feat/hypa-bridge`: `apps/hypa-api/src/api/whatsapp`, the `whatsapp_*` Prisma models, the local simulator, and the mobile Bridge screens. The public repo has no picture-generation tool, so Bridge replies carry text and voice only.
+
 ## Phase 4: Submission (Nov 11 – Nov 12 morning)
 
 28. **README:**

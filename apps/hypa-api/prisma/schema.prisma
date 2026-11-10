@@ -127,6 +127,7 @@ model user {
   walletId           String?              @unique
   commerceCustomers  commerce_customer[]
   commerceOrders     commerce_order[]
+  whatsappNumbers    whatsapp_number[]
   usageCharges       usage_charge[]
   invoices           invoice[]
   customModels       custom_model[]
@@ -198,6 +199,9 @@ model chat {
   archive  Boolean   @default(false)
   // One pinned keyboard thread per user; ordinary chats leave kind null.
   kind     String?
+  // Where the chat came from when it is not an ordinary one: "whatsapp" for a business's customer thread.
+  surface  String?
+  whatsappThread whatsapp_thread?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -733,4 +737,83 @@ model usage_charge {
 
   @@unique([orderId, tool])
   @@index([userId, created_at])
+}
+
+// A business's WhatsApp number, connected to Hypa Bridge. Its turns bill the owner's wallet.
+model whatsapp_number {
+  id              String   @id @default(cuid())
+  user            user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  // The Cloud API's id for the number: what Meta's webhook names.
+  phone_number_id String   @unique
+  display_phone   String?
+  // Encrypted. Only this server reads it back, to call the Cloud API for this number.
+  access_token    String
+  // BusinessProfile: name, what it sells, price list, hours, languages, tone.
+  profile         Json
+  // Lets simple questions go out without the owner's approval.
+  auto_reply      Boolean  @default(false)
+  // "low_balance" while replies are paused for lack of funds, until a turn succeeds again.
+  alert           String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  threads whatsapp_thread[]
+
+  @@index([userId])
+}
+
+// One customer of one business. The phone number is kept only hashed (to find the thread)
+// and encrypted (to reply); it is never logged or shown.
+model whatsapp_thread {
+  id              String          @id @default(cuid())
+  number          whatsapp_number @relation(fields: [numberId], references: [id], onDelete: Cascade)
+  numberId        String
+  chat            chat            @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId          String          @unique
+  customer_hash   String
+  customer_wa_id  String
+  customer_name   String?
+  // "agent" answers the customer; "owner" means the owner took over and the agent stays quiet.
+  mode            String          @default("agent")
+  // Start of the 24-hour window in which free-form replies are allowed.
+  last_inbound_at DateTime
+  // The latest order the agent recorded.
+  order           Json?
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
+
+  drafts whatsapp_draft[]
+
+  @@unique([numberId, customer_hash])
+  @@index([numberId, updated_at])
+}
+
+// What the agent wants to send a customer, until the owner sends, edits or drops it.
+model whatsapp_draft {
+  id            String          @id @default(cuid())
+  thread        whatsapp_thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  threadId      String
+  // pending | sent | template_sent | discarded
+  status        String          @default("pending")
+  text          String          @db.Text
+  audio_key     String?
+  image_keys    String[]
+  order         Json?
+  needs_owner   Boolean         @default(false)
+  price_warning Boolean         @default(false)
+  reason        String?
+  sent_at       DateTime?
+  created_at    DateTime        @default(now())
+  updated_at    DateTime        @updatedAt
+
+  @@index([threadId, created_at])
+}
+
+// WhatsApp message ids already handled: Meta can deliver the same message twice.
+model whatsapp_event {
+  id         String   @id
+  created_at DateTime @default(now())
+
+  @@index([created_at])
 }

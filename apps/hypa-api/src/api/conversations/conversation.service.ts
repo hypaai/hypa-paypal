@@ -31,6 +31,8 @@ export class ConversationService {
     const where: Prisma.chatWhereInput = {
       userId: user.id,
       archive: false,
+      // A business's WhatsApp customer threads have their own list, under /whatsapp/threads.
+      surface: null,
     };
 
     if (query.query) {
