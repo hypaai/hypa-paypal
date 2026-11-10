@@ -1,0 +1,66 @@
+{
+  "paid_order": {
+    "amount": "0.01",
+    "currency": "USD"
+  },
+  "methods": {
+    "paypal": {
+      "currencies": [
+        "AUD",
+        "BRL",
+        "CAD",
+        "CHF",
+        "CNY",
+        "CZK",
+        "DKK",
+        "EUR",
+        "GBP",
+        "HKD",
+        "HUF",
+        "ILS",
+        "JPY",
+        "MYR",
+        "MXN",
+        "NOK",
+        "NZD",
+        "PHP",
+        "PLN",
+        "RUB",
+        "SEK",
+        "SGD",
+        "THB",
+        "TWD",
+        "USD"
+      ],
+      "inCountryOnlyCurrencies": [
+        "BRL",
+        "CNY",
+        "MYR"
+      ],
+      "locales": {
+        "ar": "ar-EG",
+        "cs": "cs-CZ",
+        "da": "da-DK",
+        "de": "de-DE",
+        "el": "el-GR",
+        "en": "en-US",
+        "es": "es-ES",
+        "fi": "fi-FI",
+        "fr": "fr-FR",
+        "he": "he-IL",
+        "hu": "hu-HU",
+        "id": "id-ID",
+        "it": "it-IT",
+        "ja": "ja-JP",
+        "ko": "ko-KR",
+        "nl": "nl-NL",
+        "no": "no-NO",
+        "pl": "pl-PL",
+        "ru": "ru-RU",
+        "sk": "sk-SK",
+        "sv": "sv-SE",
+        "th": "th-TH"
+      }
+    }
+  }
+}
