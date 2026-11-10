@@ -54,6 +54,22 @@ async function bootstrap() {
     next();
   });
 
+  // The web app calls the API from the browser. MCP is open to any origin, since
+  // outside agents run anywhere; everything else answers only the app's own origins.
+  const appOrigins = (process.env.APP_ORIGINS || process.env.FRONTEND_URL || '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+  app.enableCors((req: Request, callback) => {
+    const open = req.path === '/v2/mcp' || req.path.startsWith('/v2/developer');
+    callback(null, {
+      origin: open ? true : appOrigins,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      optionsSuccessStatus: 204,
+    });
+  });
+
 
   app.useGlobalPipes(
     new ValidationPipe({
