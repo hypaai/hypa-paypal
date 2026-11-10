@@ -15,11 +15,8 @@ const profileOf = (value: unknown) => {
 export class WhatsappOwnerService {
   constructor(private readonly db: DbService) {}
 
-  /** The business's number, unless it is not one of Hypa's listed numbers any more (a local-demo id), which counts as not connected. */
-  private async ownNumber(userId: string) {
-    const number = await this.db.whatsapp_number.findFirst({ where: { userId }, orderBy: { created_at: 'asc' } });
-    const offered = whatsappNumberIds();
-    return number && (!offered.length || offered.includes(number.phone_number_id)) ? number : null;
+  private ownNumber(userId: string) {
+    return this.db.whatsapp_number.findFirst({ where: { userId }, orderBy: { created_at: 'asc' } });
   }
 
   private async numberOf(userId: string) {
@@ -44,10 +41,11 @@ export class WhatsappOwnerService {
   async connect(userId: string, input: { profile: unknown; autoReply?: boolean }) {
     const profile = profileOf(input.profile);
     const own = await this.ownNumber(userId);
-    if (own) {
+    const offered = whatsappNumberIds();
+    // A business keeps its number. One that is no longer on Hypa's list (say a local-demo id) is moved to one that is, threads and all.
+    if (own && (!offered.length || offered.includes(own.phone_number_id))) {
       return this.view(await this.db.whatsapp_number.update({ where: { id: own.id }, data: { profile, auto_reply: input.autoReply ?? own.auto_reply, alert: null } }));
     }
-    const offered = whatsappNumberIds();
     if (!offered.length) throw new ServiceUnavailableException('WhatsApp is not set up on this server');
     const used = new Set((await this.db.whatsapp_number.findMany({ where: { phone_number_id: { in: offered } }, select: { phone_number_id: true } })).map((row) => row.phone_number_id));
     const free = offered.find((id) => !used.has(id));
@@ -56,14 +54,12 @@ export class WhatsappOwnerService {
     const live = await readNumber(free).catch((error: Error) => {
       throw new BadRequestException(`WhatsApp did not accept that number: ${error.message}`);
     });
-    // A number left over from a local demo is dropped, with its threads, so the business starts fresh.
-    await this.db.whatsapp_number.deleteMany({ where: { userId, phone_number_id: { notIn: offered } } });
-    const number = await this.db.whatsapp_number
-      .create({ data: { userId, phone_number_id: free, display_phone: live.display_phone_number, profile, auto_reply: input.autoReply ?? false, alert: null } })
-      .catch((error: unknown) => {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('That WhatsApp number was just taken. Try again.');
-        throw error;
-      });
+    const data = { phone_number_id: free, display_phone: live.display_phone_number, profile, auto_reply: input.autoReply ?? own?.auto_reply ?? false, alert: null };
+    const save = own ? this.db.whatsapp_number.update({ where: { id: own.id }, data }) : this.db.whatsapp_number.create({ data: { userId, ...data } });
+    const number = await save.catch((error: unknown) => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('That WhatsApp number was just taken. Try again.');
+      throw error;
+    });
     return this.view(number);
   }
 

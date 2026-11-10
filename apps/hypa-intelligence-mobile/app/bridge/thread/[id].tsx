@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, RefreshControl, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { ArrowUp, Check } from 'lucide-react-native';
@@ -13,7 +13,6 @@ import { TypingDots } from '@/components/shared/typing-dots';
 import { BackButton } from '@/components/shared/back-button';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { Textarea } from '@/components/ui/textarea';
 import { FONTS } from '@/constants/fonts';
 import { bridgeKeys, useBridgeNumber, useBridgeThread } from '@/hooks/use-bridge';
 import { useThemeColors } from '@/hooks/use-theme-color';
@@ -182,38 +181,48 @@ export default function BridgeThread() {
         </ScrollView>
 
         {data ? (
-          <View className="border-t border-zinc-100 px-4 pb-3 pt-2 dark:border-zinc-900">
+          <View className="px-4">
             {owner ? (
               <>
-                <View className="mb-2 flex-row items-center justify-between">
-                  <Text className="text-[12px] text-zinc-500 dark:text-zinc-400" style={{ fontFamily: FONTS.main.regular }}>
-                    The assistant is paused while you reply.
-                  </Text>
-                  <Button variant="ghost" size="sm" disabled={busy} onPress={() => mode.mutate('agent')}>
-                    <Text>Hand back</Text>
-                  </Button>
-                </View>
-                <View className="flex-row items-end gap-2">
-                  <Textarea
+                <Text className="mb-1.5 px-1 text-[12px] text-zinc-500 dark:text-zinc-400" style={{ fontFamily: FONTS.main.regular }}>
+                  The assistant is paused while you reply.
+                </Text>
+                {/* The same card as the Chat tab's input bar. */}
+                <View style={{ borderRadius: 26, backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.border, padding: 6, marginBottom: 8 }}>
+                  <TextInput
+                    accessibilityLabel="Message the customer"
+                    placeholder="Message"
+                    placeholderTextColor={colors.placeholder}
                     value={reply}
                     onChangeText={setReply}
-                    placeholder="Message"
+                    multiline
+                    maxLength={4000}
                     editable={!busy}
-                    numberOfLines={4}
-                    className="max-h-28 min-h-10 flex-1 rounded-3xl px-4 py-2"
+                    style={{ color: colors.inputText, fontFamily: FONTS.main.regular, fontSize: 16, lineHeight: 22, maxHeight: 140, minHeight: 44, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8 }}
                   />
-                  <Button size="icon" className="rounded-full" accessibilityLabel="Send" disabled={busy || !reply.trim()} onPress={() => say.mutate()}>
-                    <ArrowUp size={20} color={colors.primaryForeground} />
-                  </Button>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Button variant="ghost" size="sm" disabled={busy} onPress={() => mode.mutate('agent')}>
+                      <Text>Hand back</Text>
+                    </Button>
+                    <View style={{ flex: 1 }} />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Send"
+                      onPress={() => say.mutate()}
+                      disabled={busy || !reply.trim()}
+                      style={{ width: 40, height: 40, margin: 2, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: reply.trim() && !busy ? colors.primary : colors.border }}>
+                      <ArrowUp color={reply.trim() && !busy ? colors.primaryForeground : colors.disabled} size={20} />
+                    </Pressable>
+                  </View>
                 </View>
               </>
             ) : (
-              <View className="flex-row items-center justify-between">
+              <View style={{ flexDirection: 'row', alignItems: 'center', borderRadius: 26, backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.border, padding: 6, paddingLeft: 18, marginBottom: 8 }}>
                 <Text className="mr-3 flex-1 text-[13px] text-zinc-500 dark:text-zinc-400" style={{ fontFamily: FONTS.main.regular }}>
                   The assistant drafts replies for you to approve.
                 </Text>
-                <Button variant="outline" size="sm" disabled={busy} onPress={() => mode.mutate('owner')}>
-                  <Text>Write a reply</Text>
+                <Button size="sm" className="rounded-full" disabled={busy} onPress={() => mode.mutate('owner')}>
+                  <Text>Reply</Text>
                 </Button>
               </View>
             )}

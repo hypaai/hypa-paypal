@@ -13,7 +13,6 @@ function setup(options: { own?: object | null; used?: string[] } = {}) {
       findFirst: jest.fn().mockResolvedValue(options.own ?? null),
       findMany: jest.fn().mockResolvedValue((options.used ?? []).map((phone_number_id) => ({ phone_number_id }))),
       create: jest.fn().mockImplementation(async ({ data }) => ({ id: 'num-1', alert: null, ...data })),
-      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       update: jest.fn().mockImplementation(async ({ data }) => ({ id: 'num-1', phone_number_id: '1397541643448933', display_phone: '+1 555 123 4567', ...data })),
     },
   };
@@ -42,14 +41,13 @@ describe('connect', () => {
     expect(db.whatsapp_number.update).toHaveBeenCalledWith({ where: { id: 'num-1' }, data: expect.objectContaining({ auto_reply: true, alert: null }) });
   });
 
-  it('drops a number that is no longer on the list and starts the business fresh on one that is', async () => {
+  it('moves a business off a number that is no longer on the list and keeps its threads', async () => {
     process.env.WHATSAPP_PHONE_NUMBER_IDS = '1397541643448933';
     const { service, db } = setup({ own: { id: 'num-1', phone_number_id: '1415999774934646', auto_reply: true } });
-    expect(await service.getNumber('owner-1')).toBeNull();
     const number = await service.connect('owner-1', { profile });
-    expect(db.whatsapp_number.update).not.toHaveBeenCalled();
-    expect(db.whatsapp_number.deleteMany).toHaveBeenCalledWith({ where: { userId: 'owner-1', phone_number_id: { notIn: ['1397541643448933'] } } });
-    expect(number).toMatchObject({ phoneNumberId: '1397541643448933', displayPhone: '+1 555 123 4567', autoReply: false });
+    expect(db.whatsapp_number.create).not.toHaveBeenCalled();
+    expect(db.whatsapp_number.update).toHaveBeenCalledWith({ where: { id: 'num-1' }, data: expect.objectContaining({ phone_number_id: '1397541643448933', auto_reply: true }) });
+    expect(number).toMatchObject({ phoneNumberId: '1397541643448933', displayPhone: '+1 555 123 4567' });
   });
 
   it('says so when every number is taken', async () => {

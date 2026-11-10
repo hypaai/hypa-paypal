@@ -24,8 +24,8 @@ import { type IncomingMessage } from './whatsapp.payload';
 /** Muse Spark runs the business agent. */
 const BRIDGE_MODEL = { provider: 'meta', model: 'muse-spark-1.3' };
 
-/** Only what a shop assistant needs. Payments are a later ticket. */
-const BRIDGE_TOOLS = ['text_to_speech', 'translate_message', 'extract_text_from_image', 'list_languages'];
+/** Only what a shop assistant needs, and nothing a stranger could run up the owner's wallet with. Payments are a later ticket. */
+const BRIDGE_TOOLS = ['speech_to_text', 'text_to_speech', 'translate_message', 'extract_text_from_image', 'list_languages'];
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -33,8 +33,14 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
 export const withinServiceWindow = (lastInboundAt: Date, now = new Date()) => now.getTime() - lastInboundAt.getTime() < WINDOW_MS;
 
 /** The customer's number, hashed so a thread can be found without keeping it readable. */
-export const customerHash = (waId: string) =>
-  createHmac('sha256', process.env.ENCRYPTION_KEY ?? '').update(`whatsapp-customer:${waId}`).digest('hex');
+export const customerHash = (waId: string) => {
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key) throw new Error('ENCRYPTION_KEY is not set');
+  return createHmac('sha256', key).update(`whatsapp-customer:${waId}`).digest('hex');
+};
+
+/** How long a claimed message id is kept. Meta stops retrying a webhook well before this. */
+const EVENT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** A stable agent request id for one WhatsApp message, so a retried job reuses the turn it already ran. */
 export function requestIdFor(messageId: string): string {
@@ -72,6 +78,7 @@ export class WhatsappService {
 
   /** Keeps the messages not seen before. Meta can deliver the same message twice, and a duplicate must run once. */
   async claimNew(messages: IncomingMessage[]): Promise<IncomingMessage[]> {
+    await this.db.whatsapp_event.deleteMany({ where: { created_at: { lt: new Date(Date.now() - EVENT_RETENTION_MS) } } });
     const fresh: IncomingMessage[] = [];
     for (const message of messages) {
       try {
@@ -82,6 +89,11 @@ export class WhatsappService {
       }
     }
     return fresh;
+  }
+
+  /** Gives a claim back when the message could not be queued, so Meta's retry is not dropped as a duplicate. */
+  async release(messages: IncomingMessage[]): Promise<void> {
+    await this.db.whatsapp_event.deleteMany({ where: { id: { in: messages.map((message) => message.id) } } });
   }
 
   /** One customer message, start to finish: understand it, draft the reply, send it when the owner allows. */
@@ -162,7 +174,10 @@ export class WhatsappService {
 
     // Quotes, orders, anything the agent could not answer, and any price off the list wait for the owner.
     const simple = !order && handoff === undefined && !priceWarning;
-    if (number.auto_reply && simple) await this.deliver(number, thread, draft);
+    // A failed send leaves the draft for the owner; throwing here would retry the job and draft the reply again.
+    if (number.auto_reply && simple) {
+      await this.deliver(number, thread, draft).catch((error: Error) => this.logger.warn(`An automatic WhatsApp reply was not sent: ${error.message}`));
+    }
   }
 
   /** The owner approves a draft, with its text edited if they like. */
@@ -188,12 +203,28 @@ export class WhatsappService {
 
   async reply(userId: string, threadId: string, text: string): Promise<void> {
     const { thread, number } = await this.ownedThread(userId, threadId);
+    // Outside the window only the approved template can go out, and it cannot carry the owner's words.
+    if (!withinServiceWindow(thread.last_inbound_at)) {
+      throw new BadRequestException('The 24-hour window has closed. You can write to this customer again after they message you.');
+    }
     const draft = await this.db.whatsapp_draft.create({ data: { threadId: thread.id, text } });
     await this.deliver(number, thread, draft);
   }
 
   /** Sends a draft: free-form inside the 24-hour window, the approved template outside it. */
   private async deliver(number: NumberRow, thread: ThreadRow, draft: DraftRow): Promise<DraftRow> {
+    // Taken before anything is sent, so a double tap cannot send twice; given back if the send fails.
+    const taken = await this.db.whatsapp_draft.updateMany({ where: { id: draft.id, status: { in: ['pending', 'template_sent'] } }, data: { status: 'sent' } });
+    if (!taken.count) throw new BadRequestException('This draft was already handled');
+    try {
+      return await this.transmit(number, thread, draft);
+    } catch (error) {
+      await this.db.whatsapp_draft.update({ where: { id: draft.id }, data: { status: draft.status } });
+      throw error;
+    }
+  }
+
+  private async transmit(number: NumberRow, thread: ThreadRow, draft: DraftRow): Promise<DraftRow> {
     const to = await decryptString(thread.customer_wa_id);
     if (!withinServiceWindow(thread.last_inbound_at)) {
       const template = { name: process.env.WHATSAPP_QUOTE_TEMPLATE?.trim() || 'quote_ready', language: process.env.WHATSAPP_QUOTE_TEMPLATE_LANGUAGE?.trim() || 'en' };

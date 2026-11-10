@@ -58,16 +58,18 @@ function setup(options: { numberRow?: Partial<typeof number> | null; threadRow?:
   const numberRow = options.numberRow === null ? null : { ...number, ...options.numberRow };
   const threadRow = { ...thread, ...options.threadRow };
   const db = {
-    whatsapp_event: { create: jest.fn().mockResolvedValue({}) },
+    whatsapp_event: { create: jest.fn().mockResolvedValue({}), deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     whatsapp_number: { findUnique: jest.fn().mockResolvedValue(numberRow), update: jest.fn().mockResolvedValue({}) },
     whatsapp_thread: {
       findUnique: jest.fn().mockResolvedValue(threadRow),
       update: jest.fn().mockResolvedValue(threadRow),
       create: jest.fn().mockResolvedValue(threadRow),
+      findFirst: jest.fn(),
     },
     whatsapp_draft: {
       create: jest.fn().mockImplementation(async ({ data }) => ({ id: 'draft-1', status: 'pending', audio_key: null, image_keys: [], ...data })),
       update: jest.fn().mockImplementation(async ({ data }) => ({ id: 'draft-1', ...data })),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findFirst: jest.fn(),
     },
     chat: { create: jest.fn().mockResolvedValue({ id: 'chat-1' }) },
@@ -101,6 +103,14 @@ describe('claimNew', () => {
       .mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: 'test' }));
     expect((await service.claimNew([text('wamid.1')])).map((message) => message.id)).toEqual(['wamid.1']);
     expect(await service.claimNew([text('wamid.1')])).toEqual([]);
+  });
+
+  it('prunes old claims, and gives a claim back so a retry is not dropped as a duplicate', async () => {
+    const { service, db } = setup();
+    await service.claimNew([text('wamid.1')]);
+    expect(db.whatsapp_event.deleteMany).toHaveBeenCalledWith({ where: { created_at: { lt: expect.any(Date) } } });
+    await service.release([text('wamid.1')]);
+    expect(db.whatsapp_event.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['wamid.1'] } } });
   });
 
   it('does not hide a real database failure as a duplicate', async () => {
@@ -144,6 +154,14 @@ describe('handle: text', () => {
 });
 
 describe('handle: voice note and photo', () => {
+  it('lets the agent transcribe a voice note, and gives it no tool that runs up the owner wallet on a stranger\'s say-so', async () => {
+    const { service, agent } = setup();
+    await service.handle(text());
+    const { toolNames } = agent.open.mock.calls[0][0];
+    expect(toolNames).toContain('speech_to_text');
+    expect(toolNames).not.toContain('create_image');
+  });
+
   it('turns a voice note into audio for the agent to transcribe and asks for a voice reply', async () => {
     const { service, agent } = setup();
     await service.handle({ ...text(), kind: 'voice', text: undefined, mediaId: 'media-1' });
@@ -257,6 +275,41 @@ describe('the 24-hour window', () => {
   });
 });
 
+describe('sending once', () => {
+  const draft = { id: 'draft-1', threadId: 'thread-1', status: 'pending', text: 'Your quote', audio_key: null, image_keys: [] };
+  const found = (db: ReturnType<typeof setup>['db']) => (db.whatsapp_draft.findFirst = jest.fn().mockResolvedValue({ ...draft, thread: { ...thread, number } }));
+
+  it('sends nothing when another tap already took the draft', async () => {
+    const { service, db } = setup();
+    found(db);
+    db.whatsapp_draft.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.send('owner-1', 'draft-1')).rejects.toThrow('already handled');
+    expect(clientMock.sendText).not.toHaveBeenCalled();
+  });
+
+  it('gives the draft back to the owner when the send fails', async () => {
+    const { service, db } = setup();
+    found(db);
+    clientMock.sendText.mockRejectedValueOnce(new Error('Meta is down'));
+    await expect(service.send('owner-1', 'draft-1')).rejects.toThrow('Meta is down');
+    expect(db.whatsapp_draft.update).toHaveBeenCalledWith({ where: { id: 'draft-1' }, data: { status: 'pending' } });
+  });
+
+  it('leaves an automatic reply that cannot be sent for the owner instead of retrying the job', async () => {
+    const { service, db } = setup({ numberRow: { auto_reply: true }, events: [done('We open 9am to 6pm.')] });
+    clientMock.sendText.mockRejectedValueOnce(new Error('Meta is down'));
+    await expect(service.handle(text())).resolves.toBeUndefined();
+    expect(db.whatsapp_draft.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an owner message outside the 24-hour window instead of sending a template without it', async () => {
+    const { service, db } = setup();
+    db.whatsapp_thread.findFirst = jest.fn().mockResolvedValue({ ...thread, last_inbound_at: new Date(Date.now() - 25 * 60 * 60 * 1000), number });
+    await expect(service.reply('owner-1', 'thread-1', 'Hello')).rejects.toThrow('24-hour window');
+    expect(db.whatsapp_draft.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('billing', () => {
   it('holds the reply and alerts the owner when the wallet is low, and the customer sees nothing', async () => {
     const lowBalance: AgentEvent = { type: 'error', code: 'agent_failed', message: errorCodes.INSUFFICIENT_BALANCE.message };
@@ -302,6 +355,13 @@ describe('privacy and ids', () => {
     expect(customerHash('2348000000001')).toBe(customerHash('2348000000001'));
     expect(customerHash('2348000000001')).not.toContain('2348000000001');
     expect(customerHash('2348000000001')).not.toBe(customerHash('2348000000002'));
+  });
+
+  it('refuses to hash without a key, which would leave phone numbers open to guessing', () => {
+    const key = process.env.ENCRYPTION_KEY;
+    delete process.env.ENCRYPTION_KEY;
+    expect(() => customerHash('2348000000001')).toThrow('ENCRYPTION_KEY');
+    process.env.ENCRYPTION_KEY = key;
   });
 
   it('gives one message one stable agent request id in UUID form', () => {

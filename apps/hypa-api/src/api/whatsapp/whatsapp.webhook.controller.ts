@@ -36,7 +36,13 @@ export class WhatsappWebhookController {
     if (!verifyMetaSignature(req.rawBody, signature, process.env.WHATSAPP_APP_SECRET?.trim())) {
       throw new ForbiddenException('Invalid signature');
     }
-    await this.queue.enqueue(await this.service.claimNew(parseIncomingMessages(req.body)));
+    const fresh = await this.service.claimNew(parseIncomingMessages(req.body));
+    try {
+      await this.queue.enqueue(fresh);
+    } catch (error) {
+      await this.service.release(fresh);
+      throw error;
+    }
     return { received: true };
   }
 }

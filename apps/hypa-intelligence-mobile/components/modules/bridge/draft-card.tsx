@@ -37,14 +37,14 @@ export function DraftCard({
       <Text className="mb-1 px-1 text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400" style={{ fontFamily: FONTS.main.medium }}>
         Suggested reply · not sent yet
       </Text>
-      <View className="max-w-[85%] rounded-2xl border border-dashed border-zinc-400 px-3.5 py-2.5 dark:border-zinc-600">
+      <View className={`${editing ? 'w-full' : 'max-w-[85%]'} rounded-2xl border border-dashed border-zinc-400 px-3.5 py-2.5 dark:border-zinc-600`}>
         {flag ? (
           <Text accessibilityRole="alert" className="mb-1.5 text-[13px] text-zinc-900 dark:text-zinc-50" style={{ fontFamily: FONTS.main.medium }}>
             {flag}
           </Text>
         ) : null}
         {editing ? (
-          <Textarea value={text} onChangeText={setText} editable={!busy} autoFocus className="min-w-56" />
+          <Textarea value={text} onChangeText={setText} editable={!busy} autoFocus className="min-h-24 w-full rounded-none border-0 bg-transparent px-0 py-0 text-[15px] leading-[22px] shadow-none dark:bg-transparent" />
         ) : (
           <Text className="text-[15px] leading-[22px] text-zinc-900 dark:text-zinc-50" style={{ fontFamily: FONTS.main.regular }}>
             {draft.text}
