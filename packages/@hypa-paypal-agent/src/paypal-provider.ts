@@ -1,4 +1,4 @@
-import type { PaymentProvider, PaymentStatus } from './contracts.js';
+import type { PayPalOrderStatus, PaymentProvider, PaymentStatus } from './contracts.js';
 
 type PayPalResponse = {
   id?: string;
@@ -12,6 +12,7 @@ type PayPalResponse = {
 };
 
 type PayPalWebhookEvent = {
+  [key: string]: unknown;
   id?: string;
   event_type?: string;
   resource?: {
@@ -142,10 +143,11 @@ export class PayPalProvider implements PaymentProvider {
         body: '{}',
       },
     );
-    return { status: this.status(response) === 'paid' ? 'paid' : 'failed' } as const;
+    const status = this.status(response);
+    return { status: status === 'approved' ? 'pending' : status } as const;
   }
 
-  async getStatus(providerRef: string): Promise<PaymentStatus> {
+  async getStatus(providerRef: string): Promise<PayPalOrderStatus> {
     const response = await this.api<PayPalResponse>(
       `/v2/checkout/orders/${encodeURIComponent(providerRef)}`,
     );
@@ -199,20 +201,25 @@ export class PayPalProvider implements PaymentProvider {
     const status = WEBHOOK_EVENT_STATUS[eventType];
     return {
       valid: true,
+      payload: event,
       event: { eventId: event.id, providerRef, eventType, ...(status ? { status } : {}) },
     };
   }
 
-  private status(response: PayPalResponse): PaymentStatus {
+  private status(response: PayPalResponse): PayPalOrderStatus {
     const captureStatus = response.purchase_units?.[0]?.payments?.captures?.[0]?.status;
-    if (response.status === 'COMPLETED' || captureStatus === 'COMPLETED') return 'paid';
+    if (captureStatus === 'COMPLETED') return 'paid';
+    if (captureStatus === 'DECLINED' || captureStatus === 'FAILED') return 'failed';
+    if (response.status === 'APPROVED') return 'approved';
     if (
       response.status === 'CREATED' ||
-      response.status === 'APPROVED' ||
+      response.status === 'SAVED' ||
       response.status === 'PAYER_ACTION_REQUIRED' ||
-      response.status === 'PENDING'
+      response.status === 'PENDING' ||
+      response.status === 'COMPLETED'
     ) return 'pending';
-    return 'failed';
+    if (response.status === 'VOIDED') return 'failed';
+    return 'pending';
   }
 
   private async api<T>(path: string, init: RequestInit = {}): Promise<T> {

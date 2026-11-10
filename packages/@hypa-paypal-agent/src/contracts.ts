@@ -1,4 +1,5 @@
 export type PaymentStatus = 'pending' | 'paid' | 'failed';
+export type PayPalOrderStatus = PaymentStatus | 'approved';
 
 export type OrderStatus =
   | 'draft'
@@ -40,8 +41,8 @@ export interface PaymentProvider {
   capture(
     providerRef: string,
     idempotencyKey: string,
-  ): Promise<{ status: Exclude<PaymentStatus, 'pending'> }>;
-  getStatus(providerRef: string): Promise<PaymentStatus>;
+  ): Promise<{ status: PaymentStatus }>;
+  getStatus(providerRef: string): Promise<PayPalOrderStatus>;
   /**
    * Checks the transmission signature. `valid` answers only that question: an
    * event whose signature verifies is valid even when this library does not
@@ -54,6 +55,7 @@ export interface PaymentProvider {
     rawBody: string,
   ): Promise<{
     valid: boolean;
+    payload?: Record<string, unknown>;
     event?: {
       eventId: string;
       providerRef: string;
