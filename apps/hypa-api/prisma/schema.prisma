@@ -130,6 +130,7 @@ model user {
   whatsappNumbers    whatsapp_number[]
   pushTokens         push_token[]
   usageCharges       usage_charge[]
+  pushDevices    push_device[]
   invoices           invoice[]
   customModels       custom_model[]
   customVoices       custom_voice[]
@@ -141,6 +142,19 @@ model user {
   referrals       referral[] @relation("referrer")
   referred_by     referral?  @relation("referred")
   referral_points Int        @default(0)
+}
+
+model push_device {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  platform   String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user user @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model dictionary_search {
