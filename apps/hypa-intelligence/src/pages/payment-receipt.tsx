@@ -36,9 +36,14 @@ const PaymentReceiptPage = () => {
   // own order reference separately and that reference does not authorize reads.
   const [receiptToken] = useState(() => params.get("receipt") ?? "");
   const cancelled = params.get("checkout") === "cancel";
-  // Set when the payer started in the Hypa app, so they go back into it.
+  // Set when the order was made in the Hypa app. The payer is often the merchant's customer, who
+  // may not have the app, so the page only offers the way back (on a phone) and never jumps there:
+  // opening an app that is not installed shows an error on iOS.
   const [appLink] = useState(() =>
-    id && receiptToken && params.get("from") === "app"
+    id &&
+    receiptToken &&
+    params.get("from") === "app" &&
+    /android|iphone|ipad/i.test(navigator.userAgent)
       ? `hypaintelligence://pay/${encodeURIComponent(id)}?receipt=${encodeURIComponent(receiptToken)}`
       : "",
   );
@@ -48,12 +53,6 @@ const PaymentReceiptPage = () => {
   const [checking, setChecking] = useState(false);
   const [polls, setPolls] = useState(0);
   const reconcileStarted = useRef(false);
-
-  useEffect(() => {
-    if (appLink && /android|iphone|ipad/i.test(navigator.userAgent)) {
-      window.location.href = appLink;
-    }
-  }, [appLink]);
 
   useLayoutEffect(() => {
     if (!params.has("receipt")) return;
