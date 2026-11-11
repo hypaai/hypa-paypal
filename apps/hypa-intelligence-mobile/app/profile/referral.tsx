@@ -257,6 +257,7 @@ const Referral = () => {
                 onPress={() => void handleAppleSignIn()}
               />
             )}
+            <SocialAuthButton label="Continue with email" onPress={() => router.navigate('/email-auth')} />
           </View>
         ) : (
           <ScrollView

@@ -103,6 +103,11 @@ const Home = () => {
               onPress={handleAppleSignIn}
             />
           )}
+          <SocialAuthButton
+            className="flex h-14 w-84 flex-row items-center justify-center"
+            label="Continue with email"
+            onPress={() => router.navigate('/email-auth')}
+          />
           <Button
             onPress={() => router.navigate('/chat')}
             variant={'ghost'}

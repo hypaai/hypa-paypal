@@ -6,7 +6,7 @@ import { FONTS } from '@/constants/fonts';
 import { useThemeColors } from '@/hooks/use-theme-color';
 
 type SocialAuthButtonProps = {
-  icon: ImageSourcePropType;
+  icon?: ImageSourcePropType;
   label: string;
   loadingLabel?: string;
   loading?: boolean;
@@ -26,7 +26,7 @@ export function SocialAuthButton({
 
   return (
     <Button className={className} disabled={loading} onPress={onPress} size="lg">
-      <Image source={icon} className="h-4 w-4" />
+      {icon ? <Image source={icon} className="h-4 w-4" /> : null}
       <Text
         className="text-white dark:text-black"
         style={{ fontFamily: FONTS.main.medium, color: colors.primaryForeground }}>
