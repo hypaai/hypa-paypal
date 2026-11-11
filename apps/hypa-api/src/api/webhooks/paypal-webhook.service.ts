@@ -190,7 +190,6 @@ export class PayPalWebhookService {
           status: 'paid',
           orderId: payment.orderId,
           merchantId: payment.order.merchantId,
-          orderId: payment.orderId,
           ...(warning ? { warning } : {}),
         };
       });
