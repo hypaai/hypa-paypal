@@ -3,6 +3,7 @@ import '@/global.css';
 import { UserProvider } from '@/lib/user-provider';
 import { DictionarySearchProvider } from '@/providers/dictionary-search-provider';
 import { SettingsProvider } from '@/context/settings-context';
+import { PushRegistration } from '@/components/push-registration';
 import { NAV_THEME } from '@/lib/theme';
 import { ToastProvider } from '@/lib/toast';
 import { queryClient } from '@/lib/query-client';
@@ -77,6 +78,7 @@ export default function RootLayout() {
                 <SafeAreaProvider>
                   <ToastProvider>
                     <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+                    <PushRegistration />
                     <Stack screenOptions={{ headerShown: false }}>
                       <Stack.Screen name="(entry)" options={{ headerShown: false }} />
                       <Stack.Screen name="refer" options={{ headerShown: false }} />
