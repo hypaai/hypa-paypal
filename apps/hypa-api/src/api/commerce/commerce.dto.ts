@@ -125,6 +125,26 @@ export function parseCreateOrder(value: unknown): CreateCommerceOrderInput {
   };
 }
 
+/** What the merchant was looking at when they tapped Approve. */
+export interface ApproveCommerceOrderInput {
+  amount: string;
+  currency: string;
+}
+
+export function parseApproveOrder(value: unknown): ApproveCommerceOrderInput {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Approval must say the amount and currency that were reviewed');
+  }
+  const body = value as Record<string, unknown>;
+  if (typeof body.amount !== 'string' || !decimalPattern.test(body.amount)) {
+    throw new Error('Amount must be a non-negative decimal string');
+  }
+  if (typeof body.currency !== 'string' || !/^[A-Za-z]{3}$/.test(body.currency)) {
+    throw new Error('Currency must be a 3-letter code');
+  }
+  return { amount: body.amount, currency: body.currency.toUpperCase() };
+}
+
 export function parseUpdateOrder(value: unknown): UpdateCommerceOrderInput {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Order update must be an object');

@@ -441,12 +441,23 @@ export class CommerceService {
     merchantId: string,
     orderId: string,
     next: 'approved' | 'cancelled',
+    reviewed?: { amount: string; currency: string },
   ) {
     return this.db.$transaction(async (tx) => {
       const order = await tx.commerce_order.findFirst({
         where: { id: orderId, merchantId },
       });
       if (!order) throw new NotFoundException('Order not found');
+      // Approving is the merchant agreeing to what they saw: if the order has changed since, the
+      // approval is refused rather than applied to an amount they never reviewed.
+      if (
+        next === 'approved' &&
+        (!reviewed ||
+          !new Prisma.Decimal(reviewed.amount).equals(order.amount) ||
+          reviewed.currency.toUpperCase() !== order.currency)
+      ) {
+        throw new BadRequestException('This order changed after you reviewed it. Open it again to review the new amount.');
+      }
       const allowed =
         (order.status === 'draft' && ['approved', 'cancelled'].includes(next)) ||
         (order.status === 'approved' && next === 'cancelled');

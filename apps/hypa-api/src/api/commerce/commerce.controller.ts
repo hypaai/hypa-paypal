@@ -13,7 +13,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { User } from 'src/libs/shared/decorator/user.decorator';
 import type { UserType } from 'src/db-types';
 import { CommerceService } from './commerce.service';
-import { parseCreateCustomer, parseCreateOrder, parseUpdateOrder } from './commerce.dto';
+import { parseApproveOrder, parseCreateCustomer, parseCreateOrder, parseUpdateOrder } from './commerce.dto';
 
 @UseGuards(AuthGuard)
 @Controller('commerce')
@@ -67,8 +67,15 @@ export class CommerceController {
   }
 
   @Post('orders/:id/approve')
-  approveOrder(@Param('id') id: string, @User() user: UserType) {
-    return this.commerce.updateOrderStatus(user.id, id, 'approved');
+  approveOrder(@Param('id') id: string, @Body() body: unknown, @User() user: UserType) {
+    try {
+      return this.commerce.updateOrderStatus(user.id, id, 'approved', parseApproveOrder(body));
+    } catch (error) {
+      if (error instanceof Error && !(error instanceof BadRequestException)) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
   }
 
   @Post('orders/:id/cancel')
