@@ -4,6 +4,8 @@
 
 Hypa is a multilingual AI assistant for small merchants. This repository is Hypa's entry for the PayPal AI Hackathon (Best Use of Agentic Commerce): an agent that takes a merchant's request by voice, photo or text in any of 160 languages, builds the order, asks the merchant to approve it, creates a PayPal checkout, sends the customer a payment message in the customer's own language, and confirms when PayPal says the order is paid.
 
+The same backend also runs **Hypa Bridge**: a WhatsApp assistant for a small business. It answers customers from the owner's price list, records their orders, and hands anything unusual to the owner. You can try it with a local simulator, with no Meta account.
+
 MIT licensed. See [LICENSE](LICENSE).
 
 ## Try the hosted demo
@@ -26,6 +28,7 @@ MIT licensed. See [LICENSE](LICENSE).
 - [Architecture](#architecture)
 - [What changed during the hackathon](#what-changed-during-the-hackathon)
 - [Try it locally](#try-it-locally)
+- [Try Hypa Bridge](#try-hypa-bridge)
 - [Connect an outside agent over MCP](#connect-an-outside-agent-over-mcp)
 - [Repository layout](#repository-layout)
 - [Useful commands](#useful-commands)
@@ -49,6 +52,8 @@ Hypa lets that merchant say "Invoice Ada 20 dollars for two bags, she speaks Hau
 7. **Confirm.** PayPal's signed webhook (or the receipt page's own check with PayPal) marks the order paid, and the agent tells the merchant only once PayPal says it is paid.
 
 The same tools are published over MCP at `/v2/mcp`, so an outside agent (Claude, ChatGPT, Codex, Muse Code) can run the same flow for a signed-in merchant.
+
+**Hypa Bridge.** A customer's WhatsApp message is checked against the app secret, queued, and answered from the owner's business profile only. Simple replies can go out on their own. Orders, unlisted prices and anything the profile cannot answer wait for the owner.
 
 ## Safety rules
 
@@ -122,6 +127,7 @@ Hypa's translation, speech, keyboard and agent features existed before the hacka
 - Approval cards in the mobile app, the web app and the iOS and Android keyboards.
 - The PayPal webhook handler, capture after approval, and the merchant fee.
 - The customer receipt page and merchant sign-in on the web.
+- Hypa Bridge: WhatsApp customer threads, owner drafts, a local WhatsApp simulator, and one-tap connection to a Hypa number.
 
 ## Try it locally
 
@@ -194,7 +200,17 @@ PAYPAL_WEBHOOK_ID=<optional webhook id>
 
 FRONTEND_URL=http://localhost:5181
 APP_ORIGINS=http://localhost:5181
+
+# Only needed for Hypa Bridge. Any local strings work with the simulator.
+WHATSAPP_APP_SECRET=any-local-string
+WHATSAPP_VERIFY_TOKEN=any-local-string
+WHATSAPP_ACCESS_TOKEN=any-local-string
+WHATSAPP_PHONE_NUMBER_IDS=1415999774934646
+WHATSAPP_CONNECT_EMAILS=merchant@example.com
+WHATSAPP_GRAPH_URL=http://localhost:4010
 ```
+
+`ENCRYPTION_KEY` is already in `.env.example`. Bridge uses it to store customer phone numbers. Keep the same value after the first customer connects, or stored numbers can no longer be read.
 
 Keep the placeholder `GOOGLE_*` values from `.env.example`; the API needs them to start even without Google sign-in. If you have no Firebase storage, set `FIREBASE_STORAGE_BUCKET` to any placeholder; only voice-reply storage needs it.
 
@@ -252,6 +268,59 @@ pnpm --filter @hypa/intelligence android
 
 The keyboard needs a physical device: enable **Hypa Keyboard** in the system keyboard settings (on iOS, also **Allow Full Access**).
 
+
+## Try Hypa Bridge
+
+Hypa Bridge answers a small business's WhatsApp customers from the owner's price list. The simulator plays WhatsApp on your computer, so you do not need a Meta account. Finish [Try it locally](#try-it-locally) through step 6 first, and install `ffmpeg` (`brew install ffmpeg`) if you want voice notes.
+
+### How it behaves
+
+- The assistant uses only the business profile: name, what you sell, currency, price list, opening hours, languages and tone. It never invents or changes a price. A discount, a refund, a complaint or an unlisted item goes to the owner.
+- When a customer wants something, it records the order and asks for what is still missing.
+- With **Answer simple questions automatically** off, every reply is a draft the owner sends, edits or discards. With it on, simple answers go out directly. Orders, hand-offs and unlisted prices always wait.
+- WhatsApp only allows free-form messages within 24 hours of the customer's last message. After that, a draft uses an approved template (`WHATSAPP_QUOTE_TEMPLATE`, default `quote_ready`).
+
+### Run it with the simulator
+
+1. In `apps/hypa-api/.env`, set the WhatsApp values from step 4 and restart the API.
+2. In the app, open **Settings → Hypa Bridge**. Fill in the business, including a real price list. Leave automatic answers off for a first run. Tap **Connect WhatsApp**. Only emails listed in `WHATSAPP_CONNECT_EMAILS` can take a number.
+3. In another terminal, start the simulator with the same secret:
+
+```bash
+WHATSAPP_APP_SECRET=any-local-string pnpm --filter hypa-api whatsapp:sim
+```
+
+4. Type as the customer. Each line is a WhatsApp message. Replies print as `← [text] ...`.
+
+| Input | Sends |
+| --- | --- |
+| `how much is a 3 piece agbada` | A text message |
+| `/voice path/to/note.ogg` | A voice note |
+| `/image path/to/photo.jpg My order` | A photo |
+| `/quit` | Stops the simulator |
+
+5. In the app, open **Hypa Bridge**, then the customer. **Send**, **Edit** or **Discard** the draft. The reply then shows in the simulator.
+
+A good first run, one line at a time, approving each draft:
+
+```text
+hi, how much is a 3 piece agbada
+I want 2, I need them by Friday
+what is your return policy?
+```
+
+The first line quotes the price list. The second records an order. The third is handed to the owner, because a return policy is not in the profile.
+
+### Connect a real WhatsApp number
+
+Hypa uses one Meta app. A business never handles a Meta credential.
+
+1. In the Meta app, copy the phone number ID and an access token. Add the phone that will play the customer.
+2. In `.env`, set `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_IDS`. Remove `WHATSAPP_GRAPH_URL`. Restart the API.
+3. Expose the API (for example `ngrok http 5678`). In Meta, set the callback to `https://<your-public-url>/v2/whatsapp/webhook`, use the same verify token, and subscribe to `messages`.
+4. In the app, tap **Connect WhatsApp** and message the test number from the phone you added.
+5. Approve an English template named `quote_ready`, or set `WHATSAPP_QUOTE_TEMPLATE`. It is used after the 24-hour window.
+
 ## Connect an outside agent over MCP
 
 Any MCP client can use the same `paypal` tool for a signed-in merchant. Use the merchant's login token (or a Hypa API key) as a Bearer token:
@@ -274,7 +343,7 @@ For Claude Desktop, Muse Code or another client, point it at `http://localhost:5
 | Path | What it is |
 | --- | --- |
 | [`packages/@hypa-paypal-agent`](packages/@hypa-paypal-agent) | Open-source PayPal Orders v2 adapter, payment contracts and fake provider |
-| [`apps/hypa-api`](apps/hypa-api) | NestJS API: agent, MCP, commerce, PayPal webhook, auth |
+| [`apps/hypa-api`](apps/hypa-api) | NestJS API: agent, MCP, commerce, PayPal webhook, Hypa Bridge, auth |
 | [`apps/hypa-intelligence`](apps/hypa-intelligence) | Web app: chat, approval card, merchant sign-in, receipt page |
 | [`apps/hypa-intelligence-mobile`](apps/hypa-intelligence-mobile) | Expo app with the approval sheet and the Hypa keyboard |
 | [`packages/@hypa-intelligence-core`](packages/@hypa-intelligence-core) | Shared tool list (including `paypal`), agent stream, approval and payment-link helpers |
@@ -286,6 +355,7 @@ For Claude Desktop, Muse Code or another client, point it at `http://localhost:5
 | --- | --- |
 | Start the API | `pnpm --filter hypa-api dev` |
 | Start the web app | `pnpm --filter hypa-intelligence dev` |
+| Run the WhatsApp simulator | `WHATSAPP_APP_SECRET=<secret> pnpm --filter hypa-api whatsapp:sim` |
 | Run the PayPal adapter demo (no keys needed) | `pnpm --filter @hypa/paypal-agent demo` |
 | Test the shared tools | `pnpm --filter @hypa/intelligence-core test` |
 | Test the web app | `pnpm --filter hypa-intelligence test` |
@@ -304,6 +374,12 @@ For Claude Desktop, Muse Code or another client, point it at `http://localhost:5
 **The web app cannot reach the API.** Check that `VITE_PUBLIC_API_URL` in `apps/hypa-intelligence/.env` points at the API and that the web app's origin is in `APP_ORIGINS`.
 
 **The agent replies with an insufficient balance error.** Top up the merchant's local wallet (step 6).
+
+**The simulator says `Set WHATSAPP_APP_SECRET` or answers `403`.** The simulator and the API must use the same `WHATSAPP_APP_SECRET`. Restart both after changing it.
+
+**No customer appears in Hypa Bridge.** `WHATSAPP_PHONE_NUMBER_IDS` must match the simulator's number, and the business must tap **Connect WhatsApp** first.
+
+**No reply appears in the simulator.** Redis must be running. `WHATSAPP_GRAPH_URL` must be `http://localhost:4010`. If automatic answers are off, send the draft in the app.
 
 ## Security
 

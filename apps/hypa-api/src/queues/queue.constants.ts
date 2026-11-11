@@ -8,6 +8,7 @@ export const USER_QUEUE_JOBS = {
 export const QUEUE_NAMES = {
   USER_QUEUE: 'user-queue',
   POD_QUEUE: 'pod-queue',
+  WHATSAPP_QUEUE: 'whatsapp-queue',
 } as const;
 
 export const DEFAULT_JOB_OPTIONS = {

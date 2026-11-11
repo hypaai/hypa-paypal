@@ -40,9 +40,9 @@ async function bootstrap() {
   app.use(
     json({
       limit: '10mb',
-      // PayPal webhook signatures are checked against the exact request bytes.
+      // PayPal and WhatsApp webhook signatures are checked against the exact request bytes.
       verify: (req: Request & { rawBody?: Buffer }, _res, buf) => {
-        if (req.headers['paypal-transmission-id']) {
+        if (req.headers['paypal-transmission-id'] || req.headers['x-hub-signature-256']) {
           req.rawBody = buf;
         }
       },
