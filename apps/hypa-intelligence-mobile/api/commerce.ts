@@ -6,10 +6,15 @@ export type CommerceOrder = PaymentApproval & {
   status: 'draft' | 'approved' | 'paid' | 'failed' | 'cancelled';
 };
 
-async function request<T>(token: string, path: string, method = 'GET'): Promise<T> {
+async function request<T>(token: string, path: string, method = 'GET', body?: unknown): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     method,
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   if (!response.ok) {
     let message = 'Could not load this order.';
@@ -26,8 +31,13 @@ async function request<T>(token: string, path: string, method = 'GET'): Promise<
 export const getCommerceOrder = (token: string, orderId: string) =>
   request<CommerceOrder>(token, `/commerce/orders/${encodeURIComponent(orderId)}/approval`);
 
-export const approveCommerceOrder = async (token: string, orderId: string) => {
-  await request<unknown>(token, `/commerce/orders/${encodeURIComponent(orderId)}/approve`, 'POST');
+/** `reviewed` is the amount and currency the merchant was looking at; the server refuses a changed order. */
+export const approveCommerceOrder = async (
+  token: string,
+  orderId: string,
+  reviewed: { amount: string; currency: string },
+) => {
+  await request<unknown>(token, `/commerce/orders/${encodeURIComponent(orderId)}/approve`, 'POST', reviewed);
   return getCommerceOrder(token, orderId);
 };
 
