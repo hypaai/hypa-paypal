@@ -3,6 +3,7 @@ import '@/global.css';
 import { UserProvider } from '@/lib/user-provider';
 import { DictionarySearchProvider } from '@/providers/dictionary-search-provider';
 import { SettingsProvider } from '@/context/settings-context';
+import { PushRegistration } from '@/components/push-registration';
 import { NAV_THEME } from '@/lib/theme';
 import { ToastProvider } from '@/lib/toast';
 import { BridgePush } from '@/components/modules/bridge/bridge-push';
@@ -99,6 +100,7 @@ export default function RootLayout() {
                   <SafeAreaProvider>
                     <ToastProvider>
                       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+                      <PushRegistration />
                       <BridgePush />
                       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
                         <Stack.Screen name="(entry)" options={{ headerShown: false }} />

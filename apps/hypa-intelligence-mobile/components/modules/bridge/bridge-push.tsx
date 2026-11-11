@@ -21,7 +21,7 @@ async function registerPhone() {
   if (!granted) return;
   const projectId = Constants.expoConfig?.extra?.eas?.projectId;
   const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
-  await apiPost('/v2/push/token', { token: data });
+  await apiPost('/v2/push/register', { token: data, platform: Platform.OS });
 }
 
 /** Renders nothing. Only a business with WhatsApp connected is asked for notifications, and a tap on one opens that customer. */

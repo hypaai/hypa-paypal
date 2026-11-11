@@ -323,7 +323,7 @@ The first line quotes the price list. The second records an order. The third is 
 
 ### Push notifications
 
-The app sends its Expo push token to `POST /v2/push/token` once a business has a number. The owner is told when a draft or an order waits for approval and when a customer has paid. A failed push is logged and never stops the reply. A real device needs a development build and push credentials. The simulator does not send pushes. Run `pnpm install` and `prisma db push` to pick up the new table.
+The app sends its Expo push token to `POST /v2/push/register` once a business has a number. The owner is told when a draft or an order waits for approval and when a customer has paid. A failed push is logged and never stops the reply. A real device needs a development build and push credentials. The simulator does not send pushes. Run `pnpm install` and `prisma db push` to pick up the new table.
 
 ### Connect a real WhatsApp number
 

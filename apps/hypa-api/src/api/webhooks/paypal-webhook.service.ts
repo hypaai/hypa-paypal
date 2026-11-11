@@ -3,12 +3,14 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from 'src/generated/prisma/client';
 import { payments } from '@hypa/config/payments';
 import { PayPalProvider } from '@hypa/paypal-agent';
 import { DbService } from 'src/libs/db/db.service';
 import { DeveloperSharedService } from '../developer/providers/shared.service';
+import { PaymentNotifier } from './payment-notifier.service';
 import { createHash } from 'node:crypto';
 import { OrderEvents } from './order-events';
 
@@ -23,6 +25,7 @@ export class PayPalWebhookService {
     private readonly db: DbService,
     private readonly shared: DeveloperSharedService,
     private readonly events: OrderEvents,
+    @Optional() private readonly notifier?: PaymentNotifier,
   ) {}
 
   async handle(headers: Record<string, string | string[] | undefined>, rawBody: string | Buffer) {
@@ -187,6 +190,7 @@ export class PayPalWebhookService {
           status: 'paid',
           orderId: payment.orderId,
           merchantId: payment.order.merchantId,
+          orderId: payment.orderId,
           ...(warning ? { warning } : {}),
         };
       });
@@ -204,7 +208,15 @@ export class PayPalWebhookService {
         } catch {
           Logger.warn('Commerce wallet balance cache invalidation failed');
         }
-        if ('orderId' in result && typeof result.orderId === 'string') await this.events.emit('paid', result.orderId);
+        if ('orderId' in result && typeof result.orderId === 'string') {
+          await this.events.emit('paid', result.orderId);
+          // Settled already, so a failure here is logged and never undoes or retries the payment.
+          try {
+            await this.notifier?.orderPaid(result.orderId);
+          } catch (error) {
+            Logger.warn(`Could not tell the merchant the order was paid: ${error instanceof Error ? error.message : 'unknown error'}`);
+          }
+        }
         return {
           received: true,
           status: 'paid',

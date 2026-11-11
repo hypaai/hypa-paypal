@@ -135,3 +135,32 @@ export function formatApprovalAmount(amount: string, currency: string, language?
   const localizedFraction = localizeDigits(fraction.padEnd(fractionLength, '0'));
   return `${integer}${fractionLength ? `${decimal}${localizedFraction}` : ''} ${currency}`;
 }
+
+/**
+ * Said by the merchant's own language, so each is short and says one thing. Languages without an
+ * entry fall back to English. The Yoruba, Igbo, Hausa and Pidgin lines want a native speaker's check.
+ */
+const CUSTOMER_PAID: Record<string, string> = {
+  en: '{name} has paid {amount}.',
+  fr: '{name} a payé {amount}.',
+  es: '{name} ha pagado {amount}.',
+  pt: '{name} pagou {amount}.',
+  yo: '{name} ti san {amount}.',
+  ig: '{name} akwụọla {amount}.',
+  ha: '{name} ya biya {amount}.',
+  pcm: '{name} don pay {amount}.',
+};
+
+/** What the merchant is told once a customer's payment has gone through. The amount is never translated as words. */
+export function paidMessage(
+  language: string | null | undefined,
+  customerName: string,
+  amount: string,
+  currency: string,
+): string {
+  const code = (language ?? 'en').trim().toLowerCase().split(/[-_]/, 1)[0];
+
+  return (CUSTOMER_PAID[code] ?? CUSTOMER_PAID.en)
+    .replace('{name}', () => customerName)
+    .replace('{amount}', () => formatApprovalAmount(amount, currency, language));
+}

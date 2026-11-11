@@ -2,7 +2,7 @@ import { PushService } from './push.service';
 
 function setup(tokens: string[] = ['ExponentPushToken[a]', 'ExponentPushToken[b]']) {
   const db = {
-    push_token: {
+    push_device: {
       upsert: jest.fn().mockResolvedValue({}),
       deleteMany: jest.fn().mockResolvedValue({}),
       findMany: jest.fn().mockResolvedValue(tokens.map((token) => ({ token }))),
@@ -20,14 +20,14 @@ beforeEach(() => {
 describe('push tokens', () => {
   it('moves a phone to whoever signed in last', async () => {
     const { service, db } = setup();
-    await service.register('user-2', 'ExponentPushToken[a]');
-    expect(db.push_token.upsert).toHaveBeenCalledWith({ where: { token: 'ExponentPushToken[a]' }, create: { token: 'ExponentPushToken[a]', userId: 'user-2' }, update: { userId: 'user-2' } });
+    await service.register('user-2', 'ExponentPushToken[a]', 'ios');
+    expect(db.push_device.upsert).toHaveBeenCalledWith({ where: { token: 'ExponentPushToken[a]' }, create: { userId: 'user-2', token: 'ExponentPushToken[a]', platform: 'ios' }, update: { userId: 'user-2', platform: 'ios' } });
   });
 
   it('only removes the signed-in user\'s own token', async () => {
     const { service, db } = setup();
     await service.unregister('user-1', 'ExponentPushToken[a]');
-    expect(db.push_token.deleteMany).toHaveBeenCalledWith({ where: { token: 'ExponentPushToken[a]', userId: 'user-1' } });
+    expect(db.push_device.deleteMany).toHaveBeenCalledWith({ where: { token: 'ExponentPushToken[a]', userId: 'user-1' } });
   });
 });
 
@@ -54,7 +54,7 @@ describe('notify', () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ data: [{ status: 'ok' }, { status: 'error', details: { error: 'DeviceNotRegistered' } }] }) });
     const { service, db } = setup();
     await service.notify('user-1', { title: 'a', body: 'b' });
-    expect(db.push_token.deleteMany).toHaveBeenCalledWith({ where: { token: { in: ['ExponentPushToken[b]'] } } });
+    expect(db.push_device.deleteMany).toHaveBeenCalledWith({ where: { token: { in: ['ExponentPushToken[b]'] } } });
   });
 
   it('never throws, so the work that caused the push goes on', async () => {
