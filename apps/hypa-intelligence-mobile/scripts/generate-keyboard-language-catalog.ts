@@ -92,10 +92,10 @@ const voicesByModelAndCode = {};
 for (const model of modelsInGroup('TTS')) {
   const codes = languageCodesForModel(model);
   ttsLanguageCodesByModel[model.name] = codes;
-  voicesByModelAndCode[model.name] = {};
+  // Voiceless models (e.g. "auto") are omitted: an empty map literal won't compile in Kotlin or Swift.
   for (const [languageName, voices] of Object.entries(model.voices ?? {})) {
     const code = languageInfoByName[languageName.toLowerCase()]?.code;
-    if (code) voicesByModelAndCode[model.name][code] = voices;
+    if (code) (voicesByModelAndCode[model.name] ??= {})[code] = voices;
   }
 }
 
@@ -400,10 +400,15 @@ ${renderSwiftServiceProviderModels()}
     selectedProvider: String,
     selectedModel: String
   ) -> ServiceModelSelection {
-    let selection = resolveServiceModel(
-      service: "ASR", selectedProvider: selectedProvider, selectedModel: selectedModel)
-    // "auto" is not a model: the API picks one when the provider is "auto".
-    return selection.model == "auto" ? ServiceModelSelection(provider: "auto", model: "auto") : selection
+    let provider = selectedProvider.trimmingCharacters(in: .whitespacesAndNewlines)
+    let model = selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+    // "auto" is the auto router. Send that pair so the API picks the model.
+    if provider.caseInsensitiveCompare("auto") == .orderedSame
+      || model.caseInsensitiveCompare("auto") == .orderedSame
+    {
+      return ServiceModelSelection(provider: "auto", model: "auto")
+    }
+    return resolveServiceModel(service: "ASR", selectedProvider: provider, selectedModel: model)
   }
 
   private static let alternateCaseForms: [String: [String]] = [
@@ -504,47 +509,47 @@ object KeyboardLanguageCatalog {
   val autoDetect = TranslationLanguage("auto", "Auto-Detect")
   val defaultVoice = ${kotlinString(defaultVoice)}
 
-  val allLanguages: List<TranslationLanguage> = listOf(
+  val allLanguages: List<TranslationLanguage> by lazy { listOf(
 ${allLanguages.map((language) => `    ${renderKotlinLanguage(language)},`).join('\n')}
-  )
+  ) }
 
-  private val translationLanguageCodesByModel: Map<String, List<String>> = mapOf(
+  private val translationLanguageCodesByModel: Map<String, List<String>> by lazy { mapOf(
 ${renderKotlinModelCodeMap(translationLanguageCodesByModel)}
-  )
+  ) }
 
-  private val dictionaryLanguageCodesByModel: Map<String, List<String>> = mapOf(
+  private val dictionaryLanguageCodesByModel: Map<String, List<String>> by lazy { mapOf(
 ${renderKotlinModelCodeMap(dictionaryLanguageCodesByModel)}
-  )
+  ) }
 
-  private val languageCodesByModel: Map<String, List<String>> = mapOf(
+  private val languageCodesByModel: Map<String, List<String>> by lazy { mapOf(
 ${renderKotlinModelCodeMap(languageCodesByModel)}
-  )
+  ) }
 
-  private val sttLanguageCodesByModel: Map<String, List<String>> = mapOf(
+  private val sttLanguageCodesByModel: Map<String, List<String>> by lazy { mapOf(
 ${renderKotlinModelCodeMap(sttLanguageCodesByModel)}
-  )
+  ) }
 
-  private val ttsLanguageCodesByModel: Map<String, List<String>> = mapOf(
+  private val ttsLanguageCodesByModel: Map<String, List<String>> by lazy { mapOf(
 ${renderKotlinModelCodeMap(ttsLanguageCodesByModel)}
-  )
+  ) }
 
-  private val voicesByModelAndCode: Map<String, Map<String, List<String>>> = mapOf(
+  private val voicesByModelAndCode: Map<String, Map<String, List<String>>> by lazy { mapOf(
 ${renderKotlinVoiceMap()}
-  )
+  ) }
 
-  private val keyboardAlphabetRowsByCode: Map<String, List<List<String>>> = mapOf(
+  private val keyboardAlphabetRowsByCode: Map<String, List<List<String>>> by lazy { mapOf(
 ${renderKotlinAlphabetRows()}
-  )
+  ) }
 
-  private val keyboardAlternatePopupsByCode: Map<String, Map<String, List<String>>> = mapOf(
+  private val keyboardAlternatePopupsByCode: Map<String, Map<String, List<String>>> by lazy { mapOf(
 ${renderKotlinAlternatePopups()}
-  )
+  ) }
 
-  private val legacyCodes: Map<String, String> = mapOf(
+  private val legacyCodes: Map<String, String> by lazy { mapOf(
 ${Object.entries(legacyCodes)
   .map(([from, to]) => `    ${kotlinString(from)} to ${kotlinString(to)},`)
   .join('\n')}
-  )
+  ) }
 
   fun canonicalCode(code: String): String {
     val normalized = code.trim().lowercase()
@@ -626,9 +631,9 @@ ${Object.entries(legacyCodes)
   fun hasCustomLayout(languageCode: String): Boolean =
     keyboardAlphabetRowsByCode.containsKey(canonicalCode(languageCode))
 
-  private val modelNamesByServiceAndProvider: Map<String, Map<String, List<String>>> = mapOf(
+  private val modelNamesByServiceAndProvider: Map<String, Map<String, List<String>>> by lazy { mapOf(
 ${renderKotlinServiceProviderModels()}
-  )
+  ) }
 
   fun resolveServiceModel(
     service: String,
@@ -657,15 +662,18 @@ ${renderKotlinServiceProviderModels()}
   fun resolveTts(selectedProvider: String, selectedModel: String): ServiceModelSelection =
     resolveServiceModel("TTS", selectedProvider, selectedModel)
 
-  // "auto" is not a model: the API picks one when the provider is "auto".
-  fun resolveStt(selectedProvider: String, selectedModel: String): ServiceModelSelection =
-    resolveServiceModel("ASR", selectedProvider, selectedModel).let {
-      if (it.model == "auto") ServiceModelSelection("auto", "auto") else it
+  // "auto" is the auto router. Send that pair so the API picks the model.
+  fun resolveStt(selectedProvider: String, selectedModel: String): ServiceModelSelection {
+    if (selectedProvider.equals("auto", ignoreCase = true) ||
+      selectedModel.equals("auto", ignoreCase = true)) {
+      return ServiceModelSelection("auto", "auto")
     }
+    return resolveServiceModel("ASR", selectedProvider, selectedModel)
+  }
 
-  private val alternateCaseForms: Map<String, List<String>> = mapOf(
+  private val alternateCaseForms: Map<String, List<String>> by lazy { mapOf(
 ${Object.entries(alternateCaseForms).map(([key, forms]) => `    ${kotlinString(key)} to listOf(${forms.map(kotlinString).join(', ')}),`).join('\n')}
-  )
+  ) }
 
   fun alternateKeys(languageCode: String, key: String, shifted: Boolean = false, capsLocked: Boolean = false): List<String> {
     val canonicalLanguage = canonicalCode(languageCode)

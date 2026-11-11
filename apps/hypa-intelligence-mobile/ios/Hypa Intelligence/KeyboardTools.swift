@@ -10,6 +10,7 @@ enum KeyboardTool: String, CaseIterable {
   case textEditing = "TEXT_EDITING"
   case languages = "LANGUAGES"
   case emoji = "EMOJI"
+  case lens = "LENS"
   case settings = "SETTINGS"
 
   static let toolbarCount = 4
@@ -25,6 +26,7 @@ enum KeyboardTool: String, CaseIterable {
     case .textEditing: return "Editing"
     case .languages: return "Languages"
     case .emoji: return "Emoji"
+    case .lens: return "Lens"
     case .settings: return "Settings"
     }
   }
@@ -40,6 +42,7 @@ enum KeyboardTool: String, CaseIterable {
     case .textEditing: return "mode-text-editing"
     case .languages: return "mode-languages"
     case .emoji: return "mode-emoji"
+    case .lens: return "mode-lens"
     case .settings: return "mode-settings"
     }
   }
@@ -69,7 +72,12 @@ enum KeyboardToolOrder {
       else { continue }
       stored.append(tool)
     }
-    return stored + KeyboardTool.allCases.filter { !stored.contains($0) }
+    var missing = KeyboardTool.allCases.filter { !stored.contains($0) }
+    if missing.contains(.lens), let settings = stored.firstIndex(of: .settings) {
+      stored.insert(.lens, at: settings)
+      missing.removeAll { $0 == .lens }
+    }
+    return stored + missing
   }
 
   static func persist(_ order: [KeyboardTool]) {

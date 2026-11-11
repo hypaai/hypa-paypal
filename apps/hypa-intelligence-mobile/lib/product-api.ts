@@ -307,8 +307,10 @@ export async function speechToText(params: { audio: string; model: string; provi
     audioBase64: params.audio,
     asrModel: params.model,
   });
-  if (params.provider) {
-    requestPayload.provider = params.provider as any;
+  // Auto already sets provider "auto" and leaves the model off. A saved provider
+  // must not overwrite that, or the auto router never runs.
+  if (params.provider && requestPayload.provider !== 'auto') {
+    requestPayload.provider = params.provider as typeof requestPayload.provider;
   }
 
   const response = await api.post(

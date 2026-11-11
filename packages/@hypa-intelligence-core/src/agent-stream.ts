@@ -40,6 +40,9 @@ export type AgentEvent =
       usage?: AgentUsage;
       /** USD charged for the turn (model and tools). */
       cost?: number;
+      /** The model that answered. Differs from the request when the server switched models. */
+      provider?: string;
+      model?: string;
       audioUrl?: string;
       chatId?: string;
       messageId?: string;
@@ -62,6 +65,8 @@ export interface AgentRequestBody {
   context?: { fieldText?: string; selectedText?: string };
   asr?: { provider: string; model: string };
   preferAudio?: boolean;
+  /** IANA time zone of the user. streamAgent fills it from the device. */
+  timeZone?: string;
 }
 
 export interface AgentConnection {
@@ -144,7 +149,7 @@ export async function streamAgent(input: {
       Accept: "text/event-stream",
       ...authHeaders(input.connection),
     },
-    body: JSON.stringify(input.body),
+    body: JSON.stringify({ timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, ...input.body }),
     signal: input.signal,
   });
   if (!response.ok || !response.body) throw await readError(response);
@@ -262,6 +267,9 @@ const TOOL_LABELS: Record<string, { running: string; failed: string; done: strin
   check_language_pair: { running: "Checking the language pair", failed: "Couldn't check the language pair.", done: "Checked the language pair" },
   list_models: { running: "Checking models", failed: "Couldn't load the models.", done: "Checked models" },
   list_voices: { running: "Checking voices", failed: "Couldn't load the voices.", done: "Checked voices" },
+  current_time: { running: "Checking the time", failed: "Couldn't check the time.", done: "Checked the time" },
+  weather: { running: "Checking the weather", failed: "Couldn't get the weather.", done: "Checked the weather" },
+  web_search: { running: "Searching the web", failed: "Couldn't search the web.", done: "Searched the web" },
   word_of_the_day: { running: "Getting the word of the day", failed: "Couldn't get the word of the day.", done: "Got the word of the day" },
   paypal: { running: "Handling the payment", failed: "Couldn't complete the payment step.", done: "Handled the payment" },
 };

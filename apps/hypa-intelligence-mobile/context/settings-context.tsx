@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
+import { analytics } from "@/lib/analytics";
 import { useKeyboardSettings } from "@/hooks/use-keyboard-settings";
 import {
   DEFAULT_KEYBOARD_SETTINGS,
@@ -131,7 +132,14 @@ export const SettingsProvider = ({ children }: { children: React.ReactNode }) =>
     return () => subscription.remove();
   }, []);
 
-  const [voiceSelectionMode] = useState<
+  useEffect(() => {
+    const events = keyboard.settings?.askHypaEvents ?? [];
+    if (events.length === 0) return;
+    for (const event of events) analytics.capture(event.name, event.props);
+    void keyboard.updateSettings({ askHypaEvents: [] });
+  }, [keyboard.settings?.askHypaEvents, keyboard.updateSettings]);
+
+  const [voiceSelectionMode, setVoiceSelectionMode] = useState<
     "auto" | "favorites" | "celebrity"
   >("auto");
   const [targetLanguageVoices, setTargetLanguageVoices] = useState<Record<string, string>>({});

@@ -8,6 +8,7 @@ import { decryptString, encryptString } from 'src/utils/encryption.utils';
 import { Prisma } from 'src/generated/prisma/client';
 import { AgentMediaService } from '../agent/agent.media';
 import { AgentService } from '../agent/agent.service';
+import { PushService } from '../push/push.service';
 import { businessProfileSchema, hoursText, unlistedAmounts, type BusinessProfile } from './bridge.profile';
 import { bridgeTools, type RecordedOrder } from './bridge.tools';
 import { convertAudio } from './whatsapp.audio';
@@ -24,7 +25,7 @@ import { type IncomingMessage } from './whatsapp.payload';
 /** Muse Spark runs the business agent. */
 const BRIDGE_MODEL = { provider: 'meta', model: 'muse-spark-1.3' };
 
-/** Only what a shop assistant needs, and nothing a stranger could run up the owner's wallet with. Payments are a later ticket. */
+/** Only what a shop assistant needs, and nothing a stranger could run up the owner's wallet with. Payment steps are not here: the owner's approval starts them. */
 const BRIDGE_TOOLS = ['speech_to_text', 'text_to_speech', 'translate_message', 'extract_text_from_image', 'list_languages'];
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -74,6 +75,7 @@ export class WhatsappService {
     private readonly db: DbService,
     private readonly agent: AgentService,
     private readonly media: AgentMediaService,
+    private readonly push: PushService,
   ) {}
 
   /** Keeps the messages not seen before. Meta can deliver the same message twice, and a duplicate must run once. */
@@ -117,6 +119,11 @@ export class WhatsappService {
     let handoff: string | undefined;
     const tools = bridgeTools({
       profile: profile.data,
+      customer: { name: thread.customer_name ?? 'WhatsApp customer', contact: `whatsapp:${thread.customer_hash.slice(0, 24)}` },
+      openOrderId: () => this.openOrderOf(thread.id),
+      linkOrder: async (orderId) => {
+        await this.db.whatsapp_order.upsert({ where: { order_id: orderId }, create: { order_id: orderId, threadId: thread.id }, update: {} });
+      },
       saveOrder: async (saved) => {
         order = saved;
         await this.db.whatsapp_thread.update({ where: { id: thread.id }, data: { order: saved } });
@@ -175,8 +182,19 @@ export class WhatsappService {
     // Quotes, orders, anything the agent could not answer, and any price off the list wait for the owner.
     const simple = !order && handoff === undefined && !priceWarning;
     // A failed send leaves the draft for the owner; throwing here would retry the job and draft the reply again.
+    let delivered = false;
     if (number.auto_reply && simple) {
-      await this.deliver(number, thread, draft).catch((error: Error) => this.logger.warn(`An automatic WhatsApp reply was not sent: ${error.message}`));
+      delivered = await this.deliver(number, thread, draft).then(() => true, (error: Error) => {
+        this.logger.warn(`An automatic WhatsApp reply was not sent: ${error.message}`);
+        return false;
+      });
+    }
+    if (!delivered) {
+      await this.push.notify(number.userId, {
+        title: thread.customer_name ?? 'WhatsApp customer',
+        body: handoff ?? (order ? 'New order waiting for your approval' : 'A reply is waiting for your approval'),
+        data: { threadId: thread.id },
+      });
     }
   }
 
@@ -263,6 +281,13 @@ export class WhatsappService {
     return {
       input: 'The customer sent something you cannot read, such as a sticker, a location or a document. Reply politely in their language that you can read text, voice notes and photos, and ask them to send one of those.',
     };
+  }
+
+  private async openOrderOf(threadId: string): Promise<string | undefined> {
+    const linked = await this.db.whatsapp_order.findMany({ where: { threadId }, select: { order_id: true } });
+    if (!linked.length) return undefined;
+    const open = await this.db.commerce_order.findFirst({ where: { id: { in: linked.map((row) => row.order_id) }, status: 'draft' }, select: { id: true } });
+    return open?.id;
   }
 
   private prompt(profile: BusinessProfile, customerName: string | null) {

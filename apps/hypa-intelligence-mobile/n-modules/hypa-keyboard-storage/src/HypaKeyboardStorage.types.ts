@@ -11,6 +11,12 @@ export type KeyboardThemeColors = {
   pillLabel: string;
 };
 
+export type AskHypaEvent = {
+  name: string;
+  props: Record<string, string | number | boolean>;
+  at: number;
+};
+
 export type KeyboardUsageStats = {
   wordsSaved: number;
   wordsTyped: number;
@@ -41,6 +47,7 @@ export type KeyboardSettings = {
   ttsModel: string;
   sttProvider: string;
   sttModel: string;
+  /** Assistant model for Ask Hypa. Shared with the Chat tab. */
   assistantProvider: string;
   assistantModel: string;
   voice: string;
@@ -59,6 +66,8 @@ export type KeyboardSettings = {
   translationHistory: KeyboardTranslationHistoryItem[];
   longPressDurationMs: number;
   toolOrder: string[];
+  /** Ask Hypa events queued by the keyboard until the app sends them. */
+  askHypaEvents?: AskHypaEvent[];
   usageStats: KeyboardUsageStats;
   appearance: 'system' | 'light' | 'dark';
   themeLight: KeyboardThemeColors;

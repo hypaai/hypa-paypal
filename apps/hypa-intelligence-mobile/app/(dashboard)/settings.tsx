@@ -258,7 +258,9 @@ const Settings = () => {
   const ttsProviderLabel =
     PROVIDERS.find((p) => p.name === selectedTtsProvider)?.displayName ?? selectedTtsProvider;
   const sttProviderLabel =
-    PROVIDERS.find((p) => p.name === selectedSttProvider)?.displayName ?? selectedSttProvider;
+    selectedSttProvider === 'auto'
+      ? 'Auto'
+      : (PROVIDERS.find((p) => p.name === selectedSttProvider)?.displayName ?? selectedSttProvider);
   const translationProviders = PROVIDERS.filter((provider) => {
     return (ALL_LLM_MODELS[provider.name] ?? []).length > 0;
   });
@@ -268,16 +270,24 @@ const Settings = () => {
   const ttsProviders = PROVIDERS.filter((provider) => {
     return (ALL_TTS_MODELS[provider.name] ?? []).length > 0;
   });
-  const sttProviders = PROVIDERS.filter((provider) => {
-    return (ALL_STT_MODELS[provider.name] ?? []).length > 0;
-  });
+  const sttProviders = [
+    { name: 'auto', displayName: 'Auto' },
+    ...PROVIDERS.filter((provider) => {
+      return (ALL_STT_MODELS[provider.name] ?? []).some((model) => model.name !== 'auto');
+    }),
+  ];
   const translationModels = modelsForProviderOrDefault(ALL_LLM_MODELS, selectedTranslationProvider);
   const dictionaryModels = modelsForProviderOrDefault(
     ALL_DICTIONARY_MODELS,
     selectedDictionaryProvider
   );
   const ttsModels = modelsForProviderOrDefault(ALL_TTS_MODELS, selectedTtsProvider);
-  const sttModels = modelsForProviderOrDefault(ALL_STT_MODELS, selectedSttProvider);
+  const sttModels =
+    selectedSttProvider === 'auto'
+      ? [{ name: 'auto', displayName: 'Auto' }]
+      : modelsForProviderOrDefault(ALL_STT_MODELS, selectedSttProvider).filter(
+          (model) => model.name !== 'auto'
+        );
   const ttsLanguages = getTtsLanguages(selectedTtsModel);
   const selectedTtsLanguage =
     resolvedLanguageSettings?.ttsLanguage ||
@@ -570,7 +580,7 @@ const Settings = () => {
                 value="Answer your customers on WhatsApp"
                 hasChevron
                 isLast
-                onPress={() => router.push('/bridge')}
+                onPress={() => router.push('/bridge/setup')}
               />
             </View>
           </View>
@@ -935,7 +945,11 @@ const Settings = () => {
           void updateSettings((current) => ({
             ...current,
             sttProvider: provider,
-            sttModel: resolveProviderModelForGroup('ASR', provider).model,
+            sttModel:
+              provider === 'auto'
+                ? 'auto'
+                : (ALL_STT_MODELS[provider] ?? []).find((model) => model.name !== 'auto')?.name ??
+                  resolveProviderModelForGroup('ASR', provider).model,
           }));
         }}
         onClose={() => setSttProviderModalVisible(false)}

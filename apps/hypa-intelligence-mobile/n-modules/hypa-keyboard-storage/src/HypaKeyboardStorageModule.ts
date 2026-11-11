@@ -11,6 +11,7 @@ declare class HypaKeyboardStorageNative extends NativeModule<HypaKeyboardStorage
   setSharedStoreJson(json: string): Promise<void>;
   startKeyboardMic(): Promise<void>;
   stopKeyboardMic(): void;
+  savePicture(uri: string, mime: string): Promise<void>;
   drainDebugEvents?: () => Array<{
     message: string;
     groupId: string;
@@ -61,6 +62,11 @@ export async function startKeyboardMic(): Promise<void> {
 
 export function stopKeyboardMic(): void {
   native.stopKeyboardMic();
+}
+
+/** Saves a local picture file to the photo library. */
+export async function savePicture(uri: string, mime: string): Promise<void> {
+  await native.savePicture(uri, mime);
 }
 
 export function addSharedStoreChangedListener(

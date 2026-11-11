@@ -268,6 +268,12 @@ pnpm --filter @hypa/intelligence android
 
 The keyboard needs a physical device: enable **Hypa Keyboard** in the system keyboard settings (on iOS, also **Allow Full Access**).
 
+For a real iPhone, open `apps/hypa-intelligence-mobile/ios` in Xcode and choose your own Apple development team for signing first.
+
+The app uses native modules (`expo-notifications`, `react-native-keyboard-controller`, the Hypa keyboard), so use a development build, not Expo Go. After pulling new changes, run `pnpm install`, then `pod install` in `apps/hypa-intelligence-mobile/ios` and rebuild. Add `EXPO_PUBLIC_POSTHOG_KEY` to `.env` only if you want usage analytics; empty turns it off.
+
+An order made in the app returns to `/pay/:id?receipt=<token>&from=app`. On a phone that page opens `hypaintelligence://pay/<id>?receipt=<token>`, and the app's `pay/[id]` screen shows the receipt. The return URL must be public HTTPS, not `localhost`, for a phone to reach it.
+
 
 ## Try Hypa Bridge
 
@@ -275,10 +281,14 @@ Hypa Bridge answers a small business's WhatsApp customers from the owner's price
 
 ### How it behaves
 
-- The assistant uses only the business profile: name, what you sell, currency, price list, opening hours, languages and tone. It never invents or changes a price. A discount, a refund, a complaint or an unlisted item goes to the owner.
-- When a customer wants something, it records the order and asks for what is still missing.
+- The assistant answers from the business profile only: name, what you sell, currency, price list, opening hours, languages and tone. It never invents or changes a price. Anything it cannot answer (a discount, a refund, a complaint, an unlisted item) goes to the owner.
+- When a customer wants something, it records an order and asks for what is still missing.
+- Customers can send text, voice notes and photos such as a handwritten order.
 - With **Answer simple questions automatically** off, every reply is a draft the owner sends, edits or discards. With it on, simple answers go out directly. Orders, hand-offs and unlisted prices always wait.
+- The owner can reply by hand (**Write a reply**), which pauses the assistant, then tap **Hand back** to let it continue.
 - WhatsApp only allows free-form messages within 24 hours of the customer's last message. After that, a draft uses an approved template (`WHATSAPP_QUOTE_TEMPLATE`, default `quote_ready`).
+- An order the assistant records becomes a draft PayPal order. Nothing payable is sent until the owner approves it. Then the customer gets the PayPal link in their language, and a receipt once PayPal says it is paid. Outside the 24-hour window the templates `invoice_ready` and `payment_received` are used. PayPal does not support NGN, GHS or XOF, so a business in those currencies arranges payment itself.
+- Replies are billed to the owner's wallet. If it runs low, the assistant pauses and the app shows an alert.
 
 ### Run it with the simulator
 
@@ -311,6 +321,10 @@ what is your return policy?
 
 The first line quotes the price list. The second records an order. The third is handed to the owner, because a return policy is not in the profile.
 
+### Push notifications
+
+The app sends its Expo push token to `POST /v2/push/register` once a business has a number. The owner is told when a draft or an order waits for approval and when a customer has paid. A failed push is logged and never stops the reply. A real device needs a development build and push credentials. The simulator does not send pushes. Run `pnpm install` and `prisma db push` to pick up the new table.
+
 ### Connect a real WhatsApp number
 
 Hypa uses one Meta app. A business never handles a Meta credential.
@@ -320,6 +334,10 @@ Hypa uses one Meta app. A business never handles a Meta credential.
 3. Expose the API (for example `ngrok http 5678`). In Meta, set the callback to `https://<your-public-url>/v2/whatsapp/webhook`, use the same verify token, and subscribe to `messages`.
 4. In the app, tap **Connect WhatsApp** and message the test number from the phone you added.
 5. Approve an English template named `quote_ready`, or set `WHATSAPP_QUOTE_TEMPLATE`. It is used after the 24-hour window.
+
+## WhatsApp order to PayPal in one file
+
+[`examples/whatsapp`](./examples/whatsapp/README.md) is a single-file bot that wires WhatsApp to the PayPal adapter, sandbox only, with keys from the environment: order, merchant approval, PayPal link, receipt.
 
 ## Connect an outside agent over MCP
 
@@ -379,7 +397,11 @@ For Claude Desktop, Muse Code or another client, point it at `http://localhost:5
 
 **No customer appears in Hypa Bridge.** `WHATSAPP_PHONE_NUMBER_IDS` must match the simulator's number, and the business must tap **Connect WhatsApp** first.
 
+**No push notification arrives.** Use a physical device with a development build, sign in, and connect a number. The token is sent then.
+
 **No reply appears in the simulator.** Redis must be running. `WHATSAPP_GRAPH_URL` must be `http://localhost:4010`. If automatic answers are off, send the draft in the app.
+
+**Native build or generated-code errors.** Run `pnpm install` and `pnpm --filter @hypa/intelligence generate:nitro`, then rebuild the app.
 
 ## Security
 

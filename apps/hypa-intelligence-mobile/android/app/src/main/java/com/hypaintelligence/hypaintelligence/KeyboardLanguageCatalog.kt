@@ -14,7 +14,7 @@ object KeyboardLanguageCatalog {
   val autoDetect = TranslationLanguage("auto", "Auto-Detect")
   val defaultVoice = ""
 
-  val allLanguages: List<TranslationLanguage> = listOf(
+  val allLanguages: List<TranslationLanguage> by lazy { listOf(
     TranslationLanguage("af", "Afrikaans"),
     TranslationLanguage("sq", "Albanian"),
     TranslationLanguage("am", "Amharic"),
@@ -175,10 +175,9 @@ object KeyboardLanguageCatalog {
     TranslationLanguage("yi", "Yiddish"),
     TranslationLanguage("yo", "Yoruba"),
     TranslationLanguage("zu", "Zulu"),
-  )
+  ) }
 
-  private val translationLanguageCodesByModel: Map<String, List<String>> = mapOf(
-    "gpt-4.1-nano" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
+  private val translationLanguageCodesByModel: Map<String, List<String>> by lazy { mapOf(
     "gpt-5.6-sol" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
     "gpt-5.6-terra" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
     "gpt-5.6-luna" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
@@ -203,10 +202,10 @@ object KeyboardLanguageCatalog {
     "meta-llama/Llama-4-Scout-17B-16E-Instruct:nscale" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
     "meta-llama/Llama-3.3-70B-Instruct:scaleway" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
     "meta-llama/Llama-3.1-8B-Instruct:deepinfra" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
-  )
+    "NousResearch/Hermes-3-Llama-3.1-70B:featherless-ai" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
+  ) }
 
-  private val dictionaryLanguageCodesByModel: Map<String, List<String>> = mapOf(
-    "gpt-4.1-nano" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
+  private val dictionaryLanguageCodesByModel: Map<String, List<String>> by lazy { mapOf(
     "gpt-5.6-sol" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
     "gpt-5.6-terra" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
     "gpt-5.6-luna" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
@@ -227,10 +226,10 @@ object KeyboardLanguageCatalog {
     "meta-llama/Llama-4-Scout-17B-16E-Instruct:nscale" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
     "meta-llama/Llama-3.3-70B-Instruct:scaleway" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
     "meta-llama/Llama-3.1-8B-Instruct:deepinfra" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
-  )
+    "NousResearch/Hermes-3-Llama-3.1-70B:featherless-ai" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
+  ) }
 
-  private val languageCodesByModel: Map<String, List<String>> = mapOf(
-    "gpt-4.1-nano" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
+  private val languageCodesByModel: Map<String, List<String>> by lazy { mapOf(
     "gpt-5.6-sol" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
     "gpt-5.6-terra" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
     "gpt-5.6-luna" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
@@ -251,19 +250,20 @@ object KeyboardLanguageCatalog {
     "meta-llama/Llama-4-Scout-17B-16E-Instruct:nscale" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
     "meta-llama/Llama-3.3-70B-Instruct:scaleway" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
     "meta-llama/Llama-3.1-8B-Instruct:deepinfra" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
+    "NousResearch/Hermes-3-Llama-3.1-70B:featherless-ai" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "cs", "de", "el", "hi-in", "hu", "id-id", "it-it", "ja-jp", "ko-kr", "nl", "pl", "ro", "ru", "th", "tr", "uk", "vi", "zh"),
     "gpt-4o-mini" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
     "gpt-5-nano" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh"),
     "auto" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo", "aii", "bn", "cs", "da", "de", "el", "fi", "gaq", "hi-in", "ht", "id-id", "it-it", "ja-jp", "kgk", "ko-kr", "lif", "mpj", "ne", "nl", "pl", "ru", "sv", "ta", "tzo", "usa", "wbi", "zh", "hu", "ro", "th", "tr", "uk", "vi", "af", "am", "as", "az", "be", "bg", "bs", "ca", "ceb", "co", "cy", "dv", "eo", "et", "eu", "fa", "fil", "fy", "ga", "gd", "gl", "gu", "haw", "he", "hmn", "hr", "hy", "is", "jv", "ka", "kk", "km", "kn", "kri", "ku", "ky", "la", "lb", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn", "mni-mtei", "mr", "ms", "mt", "my", "no", "ny", "or", "pa", "ps", "sd", "si", "sk", "sl", "sm", "sn", "sq", "sr", "st", "su", "te", "tg", "ug", "ur", "uz", "xh", "yi", "zu", "bm", "bem", "ee", "kg", "rw", "rn", "ln", "lg", "nr", "om", "nso", "ss", "ti", "ts", "tn"),
     "mansa-translate" to listOf("af", "am", "ar", "bm", "bem", "ny", "en", "ee", "ha", "ig", "kg", "rw", "rn", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "sw", "ss", "ti", "ts", "tn", "tw", "xh", "yo", "zu"),
-  )
+  ) }
 
-  private val sttLanguageCodesByModel: Map<String, List<String>> = mapOf(
+  private val sttLanguageCodesByModel: Map<String, List<String>> by lazy { mapOf(
     "gpt-4o-mini-transcribe" to listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv", "ar", "ebz", "ego", "fon", "fr", "igl", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tw", "urh"),
     "whisper-1" to listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv", "ar", "ebz", "ego", "fon", "fr", "igl", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tw", "urh"),
     "gpt-4o-transcribe" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo"),
     "gpt-transcribe" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo"),
     "gpt-4o-transcribe-diarize" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo"),
-    "auto" to listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv", "ar", "ebz", "ego", "fon", "fr", "igl", "ige", "nup", "pcm", "pt", "es", "sw", "tw", "urh", "hi-in", "id-id", "it-it", "ja-jp", "ko-kr", "af", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "de", "as", "az", "be", "bg", "bn", "bs", "ca", "ceb", "co", "cs", "cy", "da", "dv", "el", "eo", "et", "eu", "fa", "fi", "fil", "fy", "ga", "gd", "gl", "gu", "haw", "he", "hmn", "hr", "ht", "hu", "hy", "is", "jv", "ka", "kk", "km", "kn", "ku", "ky", "la", "lb", "lo", "lt", "lv", "mi", "mk", "ml", "mn", "mni-mtei", "mr", "ms", "mt", "my", "ne", "nl", "no", "or", "pa", "pl", "ps", "ro", "ru", "sd", "si", "sk", "sl", "sm", "sq", "sr", "su", "sv", "ta", "te", "tg", "th", "tr", "ug", "uk", "ur", "uz", "vi", "yi", "zh", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau"),
+    "auto" to listOf("en", "af", "ar", "hy", "az", "be", "bs", "bg", "ca", "zh", "hr", "cs", "da", "nl", "et", "fi", "fr", "gl", "de", "el", "he", "hi-in", "hu", "is", "id-id", "it-it", "ja-jp", "kn", "kk", "ko-kr", "lv", "lt", "mk", "ms", "mi", "mr", "ne", "no", "fa", "pl", "pt", "ro", "ru", "sr", "sk", "sl", "es", "sw", "sv", "ta", "th", "tr", "uk", "ur", "vi", "cy", "an", "ebz", "ef", "ego", "fon", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "tv", "tw", "urh", "yo", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "as", "bn", "ceb", "co", "dv", "eo", "eu", "fil", "fy", "ga", "gd", "gu", "haw", "hmn", "ht", "jv", "ka", "km", "ku", "ky", "la", "lb", "lo", "ml", "mn", "mni-mtei", "mt", "my", "or", "pa", "ps", "sd", "si", "sm", "sq", "su", "te", "tg", "ug", "uz", "yi", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau"),
     "wspr-small-2025-11-11-12-12--mpk" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo"),
     "wspr-small-2025-11-11-12-12--mpk-rp" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tv", "tw", "urh", "yo"),
     "hypaai-whisper-base-v1-04292-lhy" to listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv", "ar", "ebz", "ego", "fon", "fr", "igl", "ige", "nup", "pcm", "pt", "so", "es", "sw", "tw", "urh"),
@@ -275,13 +275,13 @@ object KeyboardLanguageCatalog {
     "mansa-transcribe" to listOf("af", "am", "bm", "bem", "ny", "en", "ee", "ha", "ig", "rw", "rn", "ln", "lg", "mg", "om", "nso", "sn", "so", "sw", "ti", "ts", "tn", "tw", "xh", "yo", "zu", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar", "ar-sd", "ar-tn", "mg-plateau"),
     "scribe_v2" to listOf("en", "yo", "ig", "ha"),
     "muse-voice-transcribe-1.0" to listOf("ar", "bn", "nl", "en", "fr", "de", "he", "hi-in", "id-id", "it-it", "ja-jp", "kn", "ko-kr", "ms", "zh", "mr", "pl", "pt", "es", "fil", "ta", "te", "th", "tr", "vi"),
-  )
+  ) }
 
-  private val ttsLanguageCodesByModel: Map<String, List<String>> = mapOf(
-    "gpt-4o-mini-tts" to listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv"),
-    "tts-1" to listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv"),
-    "tts-1-hd" to listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv"),
-    "auto" to listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv", "ar", "ebz", "ego", "fon", "fr", "igl", "ige", "nup", "pcm", "pt", "es", "sw", "tw", "urh", "hi-in", "id-id", "it-it", "ja-jp", "ko-kr", "af", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "de", "as", "az", "be", "bg", "bn", "bs", "ca", "ceb", "co", "cs", "cy", "da", "dv", "el", "eo", "et", "eu", "fa", "fi", "fil", "fy", "ga", "gd", "gl", "gu", "haw", "he", "hmn", "hr", "ht", "hu", "hy", "is", "jv", "ka", "kk", "km", "kn", "ku", "ky", "la", "lb", "lo", "lt", "lv", "mi", "mk", "ml", "mn", "mni-mtei", "mr", "ms", "mt", "my", "ne", "nl", "no", "or", "pa", "pl", "ps", "ro", "ru", "sd", "si", "sk", "sl", "sm", "sq", "sr", "su", "sv", "ta", "te", "tg", "th", "tr", "ug", "uk", "ur", "uz", "vi", "yi", "zh", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau"),
+  private val ttsLanguageCodesByModel: Map<String, List<String>> by lazy { mapOf(
+    "gpt-4o-mini-tts" to listOf("en", "af", "ar", "hy", "az", "be", "bs", "bg", "ca", "zh", "hr", "cs", "da", "nl", "et", "fi", "fr", "gl", "de", "el", "he", "hi-in", "hu", "is", "id-id", "it-it", "ja-jp", "kn", "kk", "ko-kr", "lv", "lt", "mk", "ms", "mi", "mr", "ne", "no", "fa", "pl", "pt", "ro", "ru", "sr", "sk", "sl", "es", "sw", "sv", "ta", "th", "tr", "uk", "ur", "vi", "cy"),
+    "tts-1" to listOf("en", "af", "ar", "hy", "az", "be", "bs", "bg", "ca", "zh", "hr", "cs", "da", "nl", "et", "fi", "fr", "gl", "de", "el", "he", "hi-in", "hu", "is", "id-id", "it-it", "ja-jp", "kn", "kk", "ko-kr", "lv", "lt", "mk", "ms", "mi", "mr", "ne", "no", "fa", "pl", "pt", "ro", "ru", "sr", "sk", "sl", "es", "sw", "sv", "ta", "th", "tr", "uk", "ur", "vi", "cy"),
+    "tts-1-hd" to listOf("en", "af", "ar", "hy", "az", "be", "bs", "bg", "ca", "zh", "hr", "cs", "da", "nl", "et", "fi", "fr", "gl", "de", "el", "he", "hi-in", "hu", "is", "id-id", "it-it", "ja-jp", "kn", "kk", "ko-kr", "lv", "lt", "mk", "ms", "mi", "mr", "ne", "no", "fa", "pl", "pt", "ro", "ru", "sr", "sk", "sl", "es", "sw", "sv", "ta", "th", "tr", "uk", "ur", "vi", "cy"),
+    "auto" to listOf("en", "af", "ar", "hy", "az", "be", "bs", "bg", "ca", "zh", "hr", "cs", "da", "nl", "et", "fi", "fr", "gl", "de", "el", "he", "hi-in", "hu", "is", "id-id", "it-it", "ja-jp", "kn", "kk", "ko-kr", "lv", "lt", "mk", "ms", "mi", "mr", "ne", "no", "fa", "pl", "pt", "ro", "ru", "sr", "sk", "sl", "es", "sw", "sv", "ta", "th", "tr", "uk", "ur", "vi", "cy", "an", "ebz", "ef", "ego", "fon", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "tv", "tw", "urh", "yo", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "as", "bn", "ceb", "co", "dv", "eo", "eu", "fil", "fy", "ga", "gd", "gu", "haw", "hmn", "ht", "jv", "ka", "km", "ku", "ky", "la", "lb", "lo", "ml", "mn", "mni-mtei", "mt", "my", "or", "pa", "ps", "sd", "si", "sm", "sq", "su", "te", "tg", "ug", "uz", "yi", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau"),
     "hypa-orpheus-3b-tts-vc-flt" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "es", "sw", "tv", "tw", "urh", "yo"),
     "hypa-orpheus-3b-tts-vc-flt-rp" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "es", "sw", "tv", "tw", "urh", "yo"),
     "hypa-orpheus-3b-tts-vc-ext-izg" to listOf("an", "ar", "ebz", "ef", "ego", "en", "fon", "fr", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "pt", "es", "sw", "tv", "tw", "urh", "yo"),
@@ -292,47 +292,185 @@ object KeyboardLanguageCatalog {
     "gemini-2.5-pro-tts" to listOf("ar", "en", "fr", "pt", "es", "sw", "hi-in", "id-id", "it-it", "ja-jp", "ko-kr"),
     "mansa-tts" to listOf("af", "am", "ar", "bm", "bem", "ber", "ny", "en", "ee", "fon", "ff", "ha", "ig", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "sw", "ss", "ti", "ts", "tn", "tw", "umb", "ve", "wo", "xh", "yo", "zu"),
     "yarn_gpt" to listOf("en", "pcm", "ha", "yo", "ig"),
-    "eleven_v3" to listOf("ar", "en", "fr", "de", "ha", "pt", "es", "sw"),
+    "eleven_v3" to listOf("ar", "en", "fr", "de", "pt", "es", "sw"),
     "eleven_multilingual_v2" to listOf("ar", "en", "fr", "de", "pt", "es"),
     "eleven_flash_v2_5" to listOf("ar", "en", "fr", "de", "pt", "es"),
-  )
+  ) }
 
-  private val voicesByModelAndCode: Map<String, Map<String, List<String>>> = mapOf(
+  private val voicesByModelAndCode: Map<String, Map<String, List<String>>> by lazy { mapOf(
     "gpt-4o-mini-tts" to mapOf(
       "en" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
-      "yo" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
-      "ig" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
-      "ha" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
-      "an" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
-      "ef" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
-      "ib" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
-      "id" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
-      "tv" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "af" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "ar" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "hy" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "az" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "be" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "bs" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "bg" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "ca" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "zh" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "hr" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "cs" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "da" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "nl" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "et" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "fi" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "fr" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "gl" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "de" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "el" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "he" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "hi-in" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "hu" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "is" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "id-id" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "it-it" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "ja-jp" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "kn" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "kk" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "ko-kr" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "lv" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "lt" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "mk" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "ms" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "mi" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "mr" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "ne" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "no" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "fa" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "pl" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "pt" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "ro" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "ru" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "sr" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "sk" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "sl" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "es" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "sw" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "sv" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "ta" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "th" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "tr" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "uk" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "ur" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "vi" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
+      "cy" to listOf("alloy", "ash", "ballad", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer", "verse", "marin", "cedar"),
     ),
     "tts-1" to mapOf(
       "en" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "yo" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "ig" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "ha" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "an" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "ef" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "ib" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "id" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "tv" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "af" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ar" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "hy" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "az" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "be" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "bs" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "bg" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ca" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "zh" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "hr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "cs" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "da" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "nl" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "et" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "fi" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "fr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "gl" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "de" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "el" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "he" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "hi-in" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "hu" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "is" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "id-id" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "it-it" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ja-jp" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "kn" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "kk" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ko-kr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "lv" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "lt" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "mk" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ms" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "mi" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "mr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ne" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "no" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "fa" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "pl" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "pt" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ro" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ru" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "sr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "sk" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "sl" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "es" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "sw" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "sv" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ta" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "th" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "tr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "uk" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ur" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "vi" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "cy" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
     ),
     "tts-1-hd" to mapOf(
       "en" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "yo" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "ig" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "ha" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "an" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "ef" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "ib" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "id" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-      "tv" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
-    ),
-    "auto" to mapOf(
-
+      "af" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ar" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "hy" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "az" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "be" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "bs" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "bg" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ca" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "zh" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "hr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "cs" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "da" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "nl" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "et" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "fi" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "fr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "gl" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "de" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "el" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "he" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "hi-in" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "hu" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "is" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "id-id" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "it-it" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ja-jp" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "kn" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "kk" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ko-kr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "lv" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "lt" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "mk" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ms" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "mi" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "mr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ne" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "no" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "fa" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "pl" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "pt" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ro" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ru" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "sr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "sk" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "sl" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "es" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "sw" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "sv" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ta" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "th" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "tr" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "uk" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "ur" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "vi" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
+      "cy" to listOf("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"),
     ),
     "hypa-orpheus-3b-tts-vc-flt" to mapOf(
       "an" to listOf("Deborah", "Enoima", "Inimform", "Ntakidara", "Uduak", "Utibeima"),
@@ -524,7 +662,6 @@ object KeyboardLanguageCatalog {
       "ar" to listOf("Bella", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Harry", "Liam", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Adam", "Bill"),
       "de" to listOf("Bella", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Harry", "Liam", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Adam", "Bill"),
       "sw" to listOf("Bella", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Harry", "Liam", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Adam", "Bill"),
-      "ha" to listOf("Bella", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Harry", "Liam", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Adam", "Bill"),
       "fr" to listOf("Bella", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Harry", "Liam", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Adam", "Bill"),
       "es" to listOf("Bella", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Harry", "Liam", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Adam", "Bill"),
       "pt" to listOf("Bella", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Harry", "Liam", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Adam", "Bill"),
@@ -545,17 +682,17 @@ object KeyboardLanguageCatalog {
       "pt" to listOf("Matheus", "Will Deep", "Wesley", "Amandoca", "Dhyogo", "Diego", "Ana", "Roberta", "Raquel", "Borges", "Bella", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Harry", "Liam", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Adam", "Bill"),
       "de" to listOf("Susi", "Lea", "Carola", "Otto", "Ava", "Ben", "Annika", "Niander", "Luisa", "Isabell", "Bella", "Roger", "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Harry", "Liam", "Alice", "Matilda", "Will", "Jessica", "Eric", "Chris", "Brian", "Daniel", "Lily", "Adam", "Bill"),
     ),
-  )
+  ) }
 
-  private val keyboardAlphabetRowsByCode: Map<String, List<List<String>>> = mapOf(
+  private val keyboardAlphabetRowsByCode: Map<String, List<List<String>>> by lazy { mapOf(
     "en" to listOf(listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p"), listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"), listOf("z", "x", "c", "v", "b", "n", "m")),
     "yo" to listOf(listOf("q", "w", "ẹ", "r", "t", "y", "u", "i", "ọ", "p"), listOf("a", "ṣ", "d", "f", "g", "h", "j", "k", "l"), listOf("z", "x", "c", "v", "b", "n", "m")),
     "igl" to listOf(listOf("q", "w", "ẹ", "r", "t", "y", "u", "i", "ọ", "p"), listOf("a", "ṣ", "d", "f", "g", "h", "j", "k", "l"), listOf("z", "x", "c", "v", "b", "n", "m")),
     "ig" to listOf(listOf("q", "w", "ẹ", "r", "t", "y", "ụ", "ị", "ọ", "p"), listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"), listOf("z", "x", "c", "v", "b", "n", "m")),
     "ha" to listOf(listOf("q", "w", "e", "r", "t", "ƴ", "u", "i", "o", "p"), listOf("a", "s", "ɗ", "f", "g", "h", "j", "ƙ", "l"), listOf("z", "x", "c", "v", "ɓ", "n", "m")),
-  )
+  ) }
 
-  private val keyboardAlternatePopupsByCode: Map<String, Map<String, List<String>>> = mapOf(
+  private val keyboardAlternatePopupsByCode: Map<String, Map<String, List<String>>> by lazy { mapOf(
     "yo" to mapOf(
       "ẹ" to listOf("e", "ẹ́", "ẹ̀", "ẹ̄", "é", "è", "ē"),
       "ọ" to listOf("o", "ọ́", "ọ̀", "ọ̄", "ó", "ò", "ō"),
@@ -600,16 +737,16 @@ object KeyboardLanguageCatalog {
       "t" to listOf("ts"),
       "g" to listOf("gw", "gy"),
     ),
-  )
+  ) }
 
-  private val legacyCodes: Map<String, String> = mapOf(
+  private val legacyCodes: Map<String, String> by lazy { mapOf(
     "tiv" to "tv",
     "ann" to "an",
     "efi" to "ef",
     "ibb" to "ib",
     "idu" to "id",
     "en-us" to "en",
-  )
+  ) }
 
   fun canonicalCode(code: String): String {
     val normalized = code.trim().lowercase()
@@ -658,16 +795,16 @@ object KeyboardLanguageCatalog {
   }
 
   fun sttLanguages(model: String): List<TranslationLanguage> {
-    val codes = sttLanguageCodesByModel[model] ?: listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv", "ar", "ebz", "ego", "fon", "fr", "igl", "ige", "nup", "pcm", "pt", "es", "sw", "tw", "urh", "hi-in", "id-id", "it-it", "ja-jp", "ko-kr", "af", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "de", "as", "az", "be", "bg", "bn", "bs", "ca", "ceb", "co", "cs", "cy", "da", "dv", "el", "eo", "et", "eu", "fa", "fi", "fil", "fy", "ga", "gd", "gl", "gu", "haw", "he", "hmn", "hr", "ht", "hu", "hy", "is", "jv", "ka", "kk", "km", "kn", "ku", "ky", "la", "lb", "lo", "lt", "lv", "mi", "mk", "ml", "mn", "mni-mtei", "mr", "ms", "mt", "my", "ne", "nl", "no", "or", "pa", "pl", "ps", "ro", "ru", "sd", "si", "sk", "sl", "sm", "sq", "sr", "su", "sv", "ta", "te", "tg", "th", "tr", "ug", "uk", "ur", "uz", "vi", "yi", "zh", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau")
+    val codes = sttLanguageCodesByModel[model] ?: listOf("en", "af", "ar", "hy", "az", "be", "bs", "bg", "ca", "zh", "hr", "cs", "da", "nl", "et", "fi", "fr", "gl", "de", "el", "he", "hi-in", "hu", "is", "id-id", "it-it", "ja-jp", "kn", "kk", "ko-kr", "lv", "lt", "mk", "ms", "mi", "mr", "ne", "no", "fa", "pl", "pt", "ro", "ru", "sr", "sk", "sl", "es", "sw", "sv", "ta", "th", "tr", "uk", "ur", "vi", "cy", "an", "ebz", "ef", "ego", "fon", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "tv", "tw", "urh", "yo", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "as", "bn", "ceb", "co", "dv", "eo", "eu", "fil", "fy", "ga", "gd", "gu", "haw", "hmn", "ht", "jv", "ka", "km", "ku", "ky", "la", "lb", "lo", "ml", "mn", "mni-mtei", "mt", "my", "or", "pa", "ps", "sd", "si", "sm", "sq", "su", "te", "tg", "ug", "uz", "yi", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau")
     val selected = languagesFromCodes(codes)
     return listOf(autoDetect) +
-      selected.ifEmpty { languagesFromCodes(listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv", "ar", "ebz", "ego", "fon", "fr", "igl", "ige", "nup", "pcm", "pt", "es", "sw", "tw", "urh", "hi-in", "id-id", "it-it", "ja-jp", "ko-kr", "af", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "de", "as", "az", "be", "bg", "bn", "bs", "ca", "ceb", "co", "cs", "cy", "da", "dv", "el", "eo", "et", "eu", "fa", "fi", "fil", "fy", "ga", "gd", "gl", "gu", "haw", "he", "hmn", "hr", "ht", "hu", "hy", "is", "jv", "ka", "kk", "km", "kn", "ku", "ky", "la", "lb", "lo", "lt", "lv", "mi", "mk", "ml", "mn", "mni-mtei", "mr", "ms", "mt", "my", "ne", "nl", "no", "or", "pa", "pl", "ps", "ro", "ru", "sd", "si", "sk", "sl", "sm", "sq", "sr", "su", "sv", "ta", "te", "tg", "th", "tr", "ug", "uk", "ur", "uz", "vi", "yi", "zh", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau")) }
+      selected.ifEmpty { languagesFromCodes(listOf("en", "af", "ar", "hy", "az", "be", "bs", "bg", "ca", "zh", "hr", "cs", "da", "nl", "et", "fi", "fr", "gl", "de", "el", "he", "hi-in", "hu", "is", "id-id", "it-it", "ja-jp", "kn", "kk", "ko-kr", "lv", "lt", "mk", "ms", "mi", "mr", "ne", "no", "fa", "pl", "pt", "ro", "ru", "sr", "sk", "sl", "es", "sw", "sv", "ta", "th", "tr", "uk", "ur", "vi", "cy", "an", "ebz", "ef", "ego", "fon", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "tv", "tw", "urh", "yo", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "as", "bn", "ceb", "co", "dv", "eo", "eu", "fil", "fy", "ga", "gd", "gu", "haw", "hmn", "ht", "jv", "ka", "km", "ku", "ky", "la", "lb", "lo", "ml", "mn", "mni-mtei", "mt", "my", "or", "pa", "ps", "sd", "si", "sm", "sq", "su", "te", "tg", "ug", "uz", "yi", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau")) }
   }
 
   fun ttsLanguages(model: String): List<TranslationLanguage> {
-    val codes = ttsLanguageCodesByModel[model] ?: listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv", "ar", "ebz", "ego", "fon", "fr", "igl", "ige", "nup", "pcm", "pt", "es", "sw", "tw", "urh", "hi-in", "id-id", "it-it", "ja-jp", "ko-kr", "af", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "de", "as", "az", "be", "bg", "bn", "bs", "ca", "ceb", "co", "cs", "cy", "da", "dv", "el", "eo", "et", "eu", "fa", "fi", "fil", "fy", "ga", "gd", "gl", "gu", "haw", "he", "hmn", "hr", "ht", "hu", "hy", "is", "jv", "ka", "kk", "km", "kn", "ku", "ky", "la", "lb", "lo", "lt", "lv", "mi", "mk", "ml", "mn", "mni-mtei", "mr", "ms", "mt", "my", "ne", "nl", "no", "or", "pa", "pl", "ps", "ro", "ru", "sd", "si", "sk", "sl", "sm", "sq", "sr", "su", "sv", "ta", "te", "tg", "th", "tr", "ug", "uk", "ur", "uz", "vi", "yi", "zh", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau")
+    val codes = ttsLanguageCodesByModel[model] ?: listOf("en", "af", "ar", "hy", "az", "be", "bs", "bg", "ca", "zh", "hr", "cs", "da", "nl", "et", "fi", "fr", "gl", "de", "el", "he", "hi-in", "hu", "is", "id-id", "it-it", "ja-jp", "kn", "kk", "ko-kr", "lv", "lt", "mk", "ms", "mi", "mr", "ne", "no", "fa", "pl", "pt", "ro", "ru", "sr", "sk", "sl", "es", "sw", "sv", "ta", "th", "tr", "uk", "ur", "vi", "cy", "an", "ebz", "ef", "ego", "fon", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "tv", "tw", "urh", "yo", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "as", "bn", "ceb", "co", "dv", "eo", "eu", "fil", "fy", "ga", "gd", "gu", "haw", "hmn", "ht", "jv", "ka", "km", "ku", "ky", "la", "lb", "lo", "ml", "mn", "mni-mtei", "mt", "my", "or", "pa", "ps", "sd", "si", "sm", "sq", "su", "te", "tg", "ug", "uz", "yi", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau")
     val selected = languagesFromCodes(codes)
-    return selected.ifEmpty { languagesFromCodes(listOf("en", "yo", "ig", "ha", "an", "ef", "ib", "id", "tv", "ar", "ebz", "ego", "fon", "fr", "igl", "ige", "nup", "pcm", "pt", "es", "sw", "tw", "urh", "hi-in", "id-id", "it-it", "ja-jp", "ko-kr", "af", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "de", "as", "az", "be", "bg", "bn", "bs", "ca", "ceb", "co", "cs", "cy", "da", "dv", "el", "eo", "et", "eu", "fa", "fi", "fil", "fy", "ga", "gd", "gl", "gu", "haw", "he", "hmn", "hr", "ht", "hu", "hy", "is", "jv", "ka", "kk", "km", "kn", "ku", "ky", "la", "lb", "lo", "lt", "lv", "mi", "mk", "ml", "mn", "mni-mtei", "mr", "ms", "mt", "my", "ne", "nl", "no", "or", "pa", "pl", "ps", "ro", "ru", "sd", "si", "sk", "sl", "sm", "sq", "sr", "su", "sv", "ta", "te", "tg", "th", "tr", "ug", "uk", "ur", "uz", "vi", "yi", "zh", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau")) }
+    return selected.ifEmpty { languagesFromCodes(listOf("en", "af", "ar", "hy", "az", "be", "bs", "bg", "ca", "zh", "hr", "cs", "da", "nl", "et", "fi", "fr", "gl", "de", "el", "he", "hi-in", "hu", "is", "id-id", "it-it", "ja-jp", "kn", "kk", "ko-kr", "lv", "lt", "mk", "ms", "mi", "mr", "ne", "no", "fa", "pl", "pt", "ro", "ru", "sr", "sk", "sl", "es", "sw", "sv", "ta", "th", "tr", "uk", "ur", "vi", "cy", "an", "ebz", "ef", "ego", "fon", "ha", "ib", "id", "igl", "ig", "ige", "nup", "pcm", "tv", "tw", "urh", "yo", "am", "bm", "bem", "ber", "ny", "ee", "ff", "kr", "ki", "rw", "kri", "ln", "lg", "mg", "nr", "om", "nso", "st", "sn", "so", "ss", "ti", "ts", "tn", "umb", "ve", "wo", "xh", "zu", "as", "bn", "ceb", "co", "dv", "eo", "eu", "fil", "fy", "ga", "gd", "gu", "haw", "hmn", "ht", "jv", "ka", "km", "ku", "ky", "la", "lb", "lo", "ml", "mn", "mni-mtei", "mt", "my", "or", "pa", "ps", "sd", "si", "sm", "sq", "su", "te", "tg", "ug", "uz", "yi", "rn", "ar-dz", "ar-eg", "ar-ly", "ar-ma", "ar-sd", "ar-tn", "mg-plateau")) }
   }
 
   fun voices(languageCode: String, model: String): List<String> =
@@ -691,19 +828,21 @@ object KeyboardLanguageCatalog {
   fun hasCustomLayout(languageCode: String): Boolean =
     keyboardAlphabetRowsByCode.containsKey(canonicalCode(languageCode))
 
-  private val modelNamesByServiceAndProvider: Map<String, Map<String, List<String>>> = mapOf(
+  private val modelNamesByServiceAndProvider: Map<String, Map<String, List<String>>> by lazy { mapOf(
     "MT" to mapOf(
-      "openai" to listOf("gpt-4.1-nano", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-4o-mini", "gpt-5-nano"),
+      "openai" to listOf("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra", "gpt-4o-mini", "gpt-5-nano"),
       "hypaai" to listOf("auto", "Hypa-Llama3.1-8b-SFT", "Hypa-Llama3.1-8b-SFT-RP", "hypa-llama3-2-8b-sft-2025-12-rvl"),
       "google" to listOf("google/gemma-4-31B-it:novita", "google/gemma-4-26B-A4B-it:novita", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash"),
       "mansa" to listOf("mansa-translate"),
       "meta" to listOf("muse-spark-1.3", "muse-spark-1.2", "muse-wonder-1.0", "meta-models/Muse-Spark-Open-816B-A42B:baseten", "meta-models/Muse-Glimmer-30B:deepinfra", "meta-llama/Llama-4-Scout-17B-16E-Instruct:nscale", "meta-llama/Llama-3.3-70B-Instruct:scaleway", "meta-llama/Llama-3.1-8B-Instruct:deepinfra"),
+      "nous" to listOf("NousResearch/Hermes-3-Llama-3.1-70B:featherless-ai"),
     ),
     "AC" to mapOf(
-      "openai" to listOf("gpt-4.1-nano", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra"),
+      "openai" to listOf("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra"),
       "hypaai" to listOf("Hypa-Llama3.1-8b-SFT", "Hypa-Llama3.1-8b-SFT-RP", "hypa-llama3-2-8b-sft-2025-12-rvl"),
       "google" to listOf("google/gemma-4-31B-it:novita", "google/gemma-4-26B-A4B-it:novita", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash"),
       "meta" to listOf("muse-spark-1.3", "muse-spark-1.2", "muse-wonder-1.0", "meta-models/Muse-Spark-Open-816B-A42B:baseten", "meta-models/Muse-Glimmer-30B:deepinfra", "meta-llama/Llama-4-Scout-17B-16E-Instruct:nscale", "meta-llama/Llama-3.3-70B-Instruct:scaleway", "meta-llama/Llama-3.1-8B-Instruct:deepinfra"),
+      "nous" to listOf("NousResearch/Hermes-3-Llama-3.1-70B:featherless-ai"),
     ),
     "TTS" to mapOf(
       "openai" to listOf("gpt-4o-mini-tts", "tts-1", "tts-1-hd"),
@@ -721,7 +860,7 @@ object KeyboardLanguageCatalog {
       "elevenlabs" to listOf("scribe_v2"),
       "meta" to listOf("muse-voice-transcribe-1.0"),
     ),
-  )
+  ) }
 
   fun resolveServiceModel(
     service: String,
@@ -750,13 +889,16 @@ object KeyboardLanguageCatalog {
   fun resolveTts(selectedProvider: String, selectedModel: String): ServiceModelSelection =
     resolveServiceModel("TTS", selectedProvider, selectedModel)
 
-  // "auto" is not a model: the API picks one when the provider is "auto".
-  fun resolveStt(selectedProvider: String, selectedModel: String): ServiceModelSelection =
-    resolveServiceModel("ASR", selectedProvider, selectedModel).let {
-      if (it.model == "auto") ServiceModelSelection("auto", "auto") else it
+  // "auto" is the auto router. Send that pair so the API picks the model.
+  fun resolveStt(selectedProvider: String, selectedModel: String): ServiceModelSelection {
+    if (selectedProvider.equals("auto", ignoreCase = true) ||
+      selectedModel.equals("auto", ignoreCase = true)) {
+      return ServiceModelSelection("auto", "auto")
     }
+    return resolveServiceModel("ASR", selectedProvider, selectedModel)
+  }
 
-  private val alternateCaseForms: Map<String, List<String>> = mapOf(
+  private val alternateCaseForms: Map<String, List<String>> by lazy { mapOf(
     "b" to listOf("B", "B"),
     "d" to listOf("D", "D"),
     "k" to listOf("K", "K"),
@@ -824,7 +966,7 @@ object KeyboardLanguageCatalog {
     "kw" to listOf("Kw", "KW"),
     "sh" to listOf("Sh", "SH"),
     "ts" to listOf("Ts", "TS"),
-  )
+  ) }
 
   fun alternateKeys(languageCode: String, key: String, shifted: Boolean = false, capsLocked: Boolean = false): List<String> {
     val canonicalLanguage = canonicalCode(languageCode)

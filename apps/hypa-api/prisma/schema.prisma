@@ -128,6 +128,7 @@ model user {
   commerceCustomers  commerce_customer[]
   commerceOrders     commerce_order[]
   whatsappNumbers    whatsapp_number[]
+  pushTokens         push_token[]
   usageCharges       usage_charge[]
   pushDevices    push_device[]
   invoices           invoice[]
@@ -753,6 +754,16 @@ model usage_charge {
   @@index([userId, created_at])
 }
 
+// A phone the user's Intelligence app can be notified on (an Expo push token).
+model push_token {
+  token      String   @id
+  user       user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  created_at DateTime @default(now())
+
+  @@index([userId])
+}
+
 // A business's WhatsApp number, connected to Hypa Bridge. Its turns bill the owner's wallet.
 model whatsapp_number {
   id              String   @id @default(cuid())
@@ -796,9 +807,22 @@ model whatsapp_thread {
   updated_at      DateTime        @updatedAt
 
   drafts whatsapp_draft[]
+  orders whatsapp_order[]
 
   @@unique([numberId, customer_hash])
   @@index([numberId, updated_at])
+}
+
+/// A payable order made in a WhatsApp thread, and which of its two messages (the payment link, the receipt) the customer has had.
+model whatsapp_order {
+  order_id        String          @id
+  thread          whatsapp_thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  threadId        String
+  link_sent_at    DateTime?
+  receipt_sent_at DateTime?
+  created_at      DateTime        @default(now())
+
+  @@index([threadId])
 }
 
 // What the agent wants to send a customer, until the owner sends, edits or drops it.

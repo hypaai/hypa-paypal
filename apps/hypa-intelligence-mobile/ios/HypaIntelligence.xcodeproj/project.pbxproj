@@ -29,6 +29,7 @@
 		AD1000000000000000000016 /* AutoCapitalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2000000000000000000016 /* AutoCapitalization.swift */; };
 		AD1000000000000000000030 /* model.int8.onnx in Resources */ = {isa = PBXBuildFile; fileRef = AD2000000000000000000030 /* model.int8.onnx */; };
 		AD1000000000000000000031 /* tokenizer.json in Resources */ = {isa = PBXBuildFile; fileRef = AD2000000000000000000031 /* tokenizer.json */; };
+		AD1000000000000000000040 /* KeyboardTapDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2000000000000000000040 /* KeyboardTapDecoder.swift */; };
 		AD2000000000000000000117 /* KeyboardNeural.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2000000000000000000217 /* KeyboardNeural.swift */; };
 		AD2000000000000000000118 /* HypaInferenceContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2000000000000000000218 /* HypaInferenceContract.swift */; };
 		AD2000000000000000000119 /* KeyboardErrorCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD2000000000000000000219 /* KeyboardErrorCatalog.swift */; };
@@ -97,6 +98,7 @@
 		AD2000000000000000000016 /* AutoCapitalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoCapitalization.swift; sourceTree = "<group>"; };
 		AD2000000000000000000030 /* model.int8.onnx */ = {isa = PBXFileReference; lastKnownFileType = file; name = model.int8.onnx; path = "../../../packages/@hypa-tiny-keys/models/model.int8.onnx"; sourceTree = SOURCE_ROOT; };
 		AD2000000000000000000031 /* tokenizer.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = tokenizer.json; path = "../../../packages/@hypa-tiny-keys/models/tokenizer.json"; sourceTree = SOURCE_ROOT; };
+		AD2000000000000000000040 /* KeyboardTapDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardTapDecoder.swift; sourceTree = "<group>"; };
 		AD2000000000000000000217 /* KeyboardNeural.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardNeural.swift; sourceTree = "<group>"; };
 		AD2000000000000000000218 /* HypaInferenceContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HypaInferenceContract.swift; sourceTree = "<group>"; };
 		AD2000000000000000000219 /* KeyboardErrorCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardErrorCatalog.swift; sourceTree = "<group>"; };
@@ -204,6 +206,7 @@
 				AD2000000000000000000004 /* KeyboardEnvironment.swift */,
 				AD2000000000000000000005 /* KeyboardLanguageCatalog.swift */,
 				AD200000000000000000000B /* KeyboardTextData.swift */,
+				AD2000000000000000000040 /* KeyboardTapDecoder.swift */,
 				AD200000000000000000000C /* KeyboardCorrection.swift */,
 				AD200000000000000000000D /* KeyboardCursorContext.swift */,
 				AD200000000000000000000E /* KeyboardPrediction.swift */,
@@ -458,6 +461,7 @@
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/ExpoConstants_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXUpdates/EXUpdates.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoFileSystem/ExpoFileSystem_privacy.bundle",
+				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoNotifications/ExpoNotifications_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/ExpoSystemUI/ExpoSystemUI_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/RNCAsyncStorage/RNCAsyncStorage_resources.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/RNSVG/RNSVGFilters.bundle",
@@ -477,6 +481,7 @@
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoConstants_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXUpdates.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoFileSystem_privacy.bundle",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoNotifications_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoSystemUI_privacy.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RNCAsyncStorage_resources.bundle",
 				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RNSVGFilters.bundle",
@@ -587,6 +592,7 @@
 				AD2000000000000000000118 /* HypaInferenceContract.swift in Sources */,
 				AD2000000000000000000117 /* KeyboardNeural.swift in Sources */,
 				AD100000000000000000000B /* KeyboardTextData.swift in Sources */,
+				AD1000000000000000000040 /* KeyboardTapDecoder.swift in Sources */,
 				AD100000000000000000000C /* KeyboardCorrection.swift in Sources */,
 				AD100000000000000000000D /* KeyboardCursorContext.swift in Sources */,
 				AD100000000000000000000E /* KeyboardPrediction.swift in Sources */,

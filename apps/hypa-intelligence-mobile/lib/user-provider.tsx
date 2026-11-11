@@ -5,10 +5,12 @@ import Body from '@/components/shared/body';
 import { useKeyboardSettings } from '@/hooks/use-keyboard-settings';
 import { queryClient } from '@/lib/query-client';
 import { useQuery } from '@tanstack/react-query';
-import { router, usePathname } from 'expo-router';
+import { analytics } from '@/lib/analytics';
+import { router, useGlobalSearchParams, usePathname } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 import { useHypaKeyboardStatus } from './use-hypa-keyboard-status';
 import Requirements from '@/components/shared/requirements';
+import { isOldCamera, launchLinkPath } from '@/lib/keyboard-link';
 
 type UserContextValue = {
   loading: boolean;
@@ -30,6 +32,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const { settings, setSettings, isLoading: settingsLoading } = useKeyboardSettings();
   const hasResolvedOnce = useRef(false);
   const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+  const { camera } = useGlobalSearchParams<{ camera?: string }>();
+  const cameraRef = useRef(camera);
+  cameraRef.current = camera;
   const { enabled } = useHypaKeyboardStatus();
   const userQ = useQuery({
     queryFn: getUser,
@@ -56,6 +63,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     user: userData ?? null,
   };
 
+  useEffect(() => analytics.syncUser(userData?.id), [userData?.id]);
 
   useEffect(() => {
     if (userQ.isLoading) return;
@@ -67,7 +75,14 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     if (userQ.isSuccess && userData) {
       hasResolvedOnce.current = true;
-      router.navigate('/chat');
+      // A link that reopened the app and was missed goes first. Otherwise only the entry and sign-in
+      // screens move on to Chat, so a late profile never overrides a link.
+      void launchLinkPath().then((link) => {
+        const here = pathnameRef.current;
+        const oldKeyboardLink = here === '/keyboard-chat' && isOldCamera(cameraRef.current ?? '');
+        const to = link ?? (here === '/' || here.startsWith('/auth') || oldKeyboardLink ? '/chat' : null);
+        if (to) router.navigate(to);
+      });
       return;
     }
   }, [userQ.isLoading, userQ.isError, userQ.isSuccess, userData]);

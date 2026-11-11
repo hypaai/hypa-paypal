@@ -18,7 +18,7 @@ class AutocorrectEngine(
     fun hasApostropheEnding(word: String): Boolean = APOSTROPHE_ENDING.containsMatchIn(word)
   }
 
-  fun evaluate(word: String, previousWord: String): CorrectionDecision {
+  fun evaluate(word: String, previousWord: String, taps: List<TapFit>): CorrectionDecision {
     if (!word.all { it.isLetter() || it == '\'' } || hasApostropheEnding(word)) return CorrectionDecision.keep(word)
     if (!corpus.isReady) return CorrectionDecision.keep(word)
 
@@ -27,7 +27,22 @@ class AutocorrectEngine(
       return CorrectionDecision(word, CorrectionAction.AUTO_CORRECT, matchCapitalization(word, it), 1f)
     }
     if (word.length < MIN_WORD_LENGTH) return CorrectionDecision.keep(word)
-    if (personal.contains(word) || corpus.contains(normalized)) return CorrectionDecision.keep(word)
+    if (personal.contains(word)) return CorrectionDecision.keep(word)
+    if (corpus.contains(normalized)) {
+      // A real but uncommon word (for example "tome") may be a slip for a common one the taps clearly point to.
+      if (corpus.isCommon(normalized) || word.first().isUpperCase()) return CorrectionDecision.keep(word)
+      return tapDecision(
+        word,
+        TapDecoder.best(normalized, taps, corpus.commonOfLength(normalized.length), TapDecoder.UNCOMMON_WORD_BONUS),
+      )
+    }
+
+    TapDecoder.split(normalized, taps, corpus::isCommon)?.let { (left, right) ->
+      val joined = "${corpus.canonical(left) ?: left} ${corpus.canonical(right) ?: right}"
+      return CorrectionDecision(word, CorrectionAction.AUTO_CORRECT, matchCapitalization(word, joined), 1f)
+    }
+
+    val tapWord = TapDecoder.best(normalized, taps, corpus.commonOfLength(normalized.length))
 
     val expected =
       personal.following(previousWord, CONTEXT_DEPTH).associate {
@@ -46,12 +61,15 @@ class AutocorrectEngine(
         }
       }
     }
-    if (candidates.isEmpty()) return CorrectionDecision.keep(word)
+    if (candidates.isEmpty()) return tapDecision(word, tapWord)
 
     val known = candidates.filter { it.familiarity > 0f }
-    val best =
-      if (known.isNotEmpty()) known.maxByOrNull { it.familiarity * it.typoFactor }!!
-      else unambiguousBest(candidates) ?: return CorrectionDecision.keep(word)
+    val best = if (known.isNotEmpty()) known.maxByOrNull { it.familiarity * it.typoFactor } else unambiguousBest(candidates)
+    // Taps can only rank words of the same length, so a fix for a missing or extra letter stays with the text-based logic.
+    if (known.isEmpty() && tapWord != null && (best == null || best.text.length == normalized.length)) {
+      return tapDecision(word, tapWord)
+    }
+    if (best == null) return CorrectionDecision.keep(word)
 
     val replacement = matchCapitalization(word, best.text)
     return CorrectionDecision(
@@ -61,6 +79,13 @@ class AutocorrectEngine(
       best.typoFactor,
     )
   }
+
+  private fun tapDecision(word: String, tapWord: String?): CorrectionDecision =
+    if (tapWord == null) {
+      CorrectionDecision.keep(word)
+    } else {
+      CorrectionDecision(word, CorrectionAction.AUTO_CORRECT, matchCapitalization(word, corpus.canonical(tapWord) ?: tapWord), 1f)
+    }
 
   private fun missingApostrophe(normalized: String): String? {
     if ('\'' in normalized || corpus.isCommon(normalized)) return null

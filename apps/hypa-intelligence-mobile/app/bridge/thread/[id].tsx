@@ -8,6 +8,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { discardBridgeDraft, replyInBridgeThread, sendBridgeDraft, setBridgeMode } from '@/api/bridge';
 import { DraftCard } from '@/components/modules/bridge/draft-card';
 import { OrderCard } from '@/components/modules/bridge/order-card';
+import { ThreadPayment } from '@/components/modules/bridge/thread-payment';
 import Body from '@/components/shared/body';
 import { TypingDots } from '@/components/shared/typing-dots';
 import { BackButton } from '@/components/shared/back-button';
@@ -167,6 +168,10 @@ export default function BridgeThread() {
               </View>
             </View>
           ) : null}
+
+          {data?.payments.map((payment) => (
+            <ThreadPayment key={payment.orderId} orderId={payment.orderId} threadId={id} linkSent={payment.linkSent} />
+          ))}
 
           {data?.drafts.map((draft) => (
             <DraftCard

@@ -21,17 +21,21 @@ export default function KeyboardMicScreen() {
     setPhase("starting");
     startKeyboardMic()
       .then(() => setPhase("listening"))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Couldn't start the microphone."));
+      .catch((e: unknown) => {
+        stopKeyboardMic();
+        setError(e instanceof Error ? e.message : "Couldn't start the microphone.");
+      });
   }, [at]);
+
+  // Closing this page ends the mic. Going back to another app leaves the page open,
+  // so the keyboard keeps recording.
+  useEffect(() => stopKeyboardMic, []);
 
   const stop = () => {
     stopKeyboardMic();
     setPhase("stopped");
   };
-  const close = () => {
-    stopKeyboardMic();
-    router.replace("/");
-  };
+  const close = () => router.replace("/");
 
   const listening = phase === "listening" && !error;
   const Icon = listening ? Mic : MicOff;

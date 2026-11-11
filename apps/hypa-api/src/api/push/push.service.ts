@@ -79,4 +79,9 @@ export class PushService {
       await this.db.push_device.deleteMany({ where: { token: { in: gone.map((device) => device.token) } } });
     }
   }
+
+  /** The WhatsApp bridge calls this. It is the same best-effort send. */
+  async notify(userId: string, message: PushMessage) {
+    await this.send(userId, message);
+  }
 }

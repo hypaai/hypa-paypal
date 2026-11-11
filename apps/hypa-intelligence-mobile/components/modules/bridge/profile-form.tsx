@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { ChevronDown } from 'lucide-react-native';
 
+import { payments } from '@hypa/config/payments';
 import { SelectorModal } from '@/components/modules/settings/selector-modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,7 +68,14 @@ export function ProfileForm({ value, onChange }: { value: BridgeProfileForm; onC
       <Field label="What you sell">
         <Input value={value.sells} onChangeText={(text) => set('sells', text)} placeholder="Men's and women's native wear" />
       </Field>
-      <Field label="Currency" hint="Your prices and the assistant's quotes use this currency.">
+      <Field
+        label="Currency"
+        hint={
+          payments.methods.paypal.currencies.includes(value.currency.toUpperCase())
+            ? "Your prices and the assistant's quotes use this currency."
+            : `PayPal does not support ${value.currency.toUpperCase()}, so customers cannot pay in chat and you arrange payment yourself. Pick USD, EUR or GBP for payment links.`
+        }
+      >
         <Select label={CURRENCIES.find((currency) => currency.name === value.currency)?.displayName ?? value.currency} onPress={() => setPicker({ kind: 'currency' })} />
       </Field>
 

@@ -302,6 +302,12 @@ final class KeyHostView: UIView {
   private static let tapReach: CGFloat = 1
   private static let tapSpread: CGFloat = 0.5
   private static let tapPriorWeight: CGFloat = 0.8
+  private static let tapTrailMax = 32
+
+  private var tapTrail: [TapFit] = []
+  var recentTaps: [TapFit] { tapTrail }
+
+  func clearTaps() { tapTrail.removeAll() }
 
   private var hitSlopOverlay: HitSlopOverlay?
 
@@ -389,6 +395,26 @@ final class KeyHostView: UIView {
     return best
   }
 
+  private func isLetterKey(_ key: KeyButton) -> Bool {
+    key.keyName.count == 1 && key.keyName.first?.isLetter == true
+  }
+
+  private func recordTap(on key: KeyButton, at point: CGPoint, in rects: [(key: KeyButton, rect: CGRect)]) {
+    guard isLetterKey(key) else { return }
+    var penalty: [String: Float] = [:]
+    for entry in rects {
+      let isSpace = entry.key.keyName == "space"
+      guard isSpace || isLetterKey(entry.key) else { continue }
+      let dx = (point.x - entry.rect.midX) / entry.rect.width
+      let dy = (point.y - entry.rect.midY) / entry.rect.height
+      let cost = Float((dx * dx + dy * dy) / (2 * Self.tapSpread * Self.tapSpread))
+      let label = isSpace ? TapDecoder.space : TextNormalizer.normalize(entry.key.keyName)
+      penalty[label] = min(penalty[label] ?? .greatestFiniteMagnitude, cost)
+    }
+    tapTrail.append(TapFit(letter: TextNormalizer.normalize(key.keyName), penalty: penalty))
+    if tapTrail.count > Self.tapTrailMax { tapTrail.removeFirst() }
+  }
+
   fileprivate func drawHitSlop(in context: CGContext) {
     let rects = hitRects()
     guard !rects.isEmpty else { return }
@@ -449,6 +475,7 @@ final class KeyHostView: UIView {
     for touch in touches {
       let point = touch.location(in: self)
       guard let key = key(at: point, in: rects, prior: prior) else { continue }
+      recordTap(on: key, at: point, in: rects)
       let press = Press(key: key, origin: point)
       let id = ObjectIdentifier(touch)
       presses[id] = press

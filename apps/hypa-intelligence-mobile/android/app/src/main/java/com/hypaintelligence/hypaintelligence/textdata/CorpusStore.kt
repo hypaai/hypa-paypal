@@ -37,6 +37,8 @@ class CorpusStore(context: Context) {
 
   fun commonWithPrefix(normalized: String): Int = packs.sumOf { it.commonWithPrefix(normalized) }
 
+  fun commonOfLength(length: Int): List<String> = packs.flatMap { it.commonOfLength(length) }
+
   fun canonical(normalized: String): String? =
     packs.firstNotNullOfOrNull { it.canonical(normalized) }
 

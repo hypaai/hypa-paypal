@@ -10,6 +10,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { DictionaryModule } from './dictionary/dictionary.module';
 import { TranslateModule } from './translate/translate.module';
 import { AiModule } from 'src/ai/ai.module';
+import { PushModule } from './push/push.module';
 import { AgentModule } from './agent/agent.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { CommerceModule } from './commerce/commerce.module';
@@ -27,6 +28,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     DeveloperModule,
     WebhooksModule,
     AgentModule,
+    PushModule,
     ConversationsModule,
     CommerceModule,
     WhatsappModule,

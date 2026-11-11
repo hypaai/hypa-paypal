@@ -66,6 +66,7 @@ export interface BridgeThread {
   customerName: string | null;
   mode: 'agent' | 'owner';
   order: BridgeOrder | null;
+  payments: { orderId: string; status: string; linkSent: boolean }[];
   messages: { id: string; role: string; content: string; createdAt: string }[];
   drafts: BridgeDraft[];
 }
@@ -90,5 +91,9 @@ export const replyInBridgeThread = (id: string, text: string) =>
 
 export const sendBridgeDraft = (id: string, text?: string) =>
   apiPost<{ status: string }>(`/v2/whatsapp/drafts/${encodeURIComponent(id)}/send`, text === undefined ? {} : { text });
+
+/** Sends an approved order's PayPal link to the customer on WhatsApp, again if it went before. */
+export const sendBridgePaymentLink = (orderId: string) =>
+  apiPost<{ sent: boolean }>(`/v2/whatsapp/orders/${encodeURIComponent(orderId)}/payment-link`);
 
 export const discardBridgeDraft = (id: string) => apiPost<{ discarded: boolean }>(`/v2/whatsapp/drafts/${encodeURIComponent(id)}/discard`);

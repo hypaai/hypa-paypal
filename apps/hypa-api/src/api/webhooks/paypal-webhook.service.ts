@@ -12,6 +12,7 @@ import { DbService } from 'src/libs/db/db.service';
 import { DeveloperSharedService } from '../developer/providers/shared.service';
 import { PaymentNotifier } from './payment-notifier.service';
 import { createHash } from 'node:crypto';
+import { OrderEvents } from './order-events';
 
 
 type PayPalStatus = 'pending' | 'paid' | 'failed';
@@ -23,6 +24,7 @@ export class PayPalWebhookService {
   constructor(
     private readonly db: DbService,
     private readonly shared: DeveloperSharedService,
+    private readonly events: OrderEvents,
     @Optional() private readonly notifier?: PaymentNotifier,
   ) {}
 
@@ -186,6 +188,7 @@ export class PayPalWebhookService {
         return {
           received: true,
           status: 'paid',
+          orderId: payment.orderId,
           merchantId: payment.order.merchantId,
           orderId: payment.orderId,
           ...(warning ? { warning } : {}),
@@ -205,13 +208,14 @@ export class PayPalWebhookService {
         } catch {
           Logger.warn('Commerce wallet balance cache invalidation failed');
         }
-        // Settled already, so a failure here is logged and never undoes or retries the payment.
-        try {
-          if ('orderId' in result && typeof result.orderId === 'string') {
+        if ('orderId' in result && typeof result.orderId === 'string') {
+          await this.events.emit('paid', result.orderId);
+          // Settled already, so a failure here is logged and never undoes or retries the payment.
+          try {
             await this.notifier?.orderPaid(result.orderId);
+          } catch (error) {
+            Logger.warn(`Could not tell the merchant the order was paid: ${error instanceof Error ? error.message : 'unknown error'}`);
           }
-        } catch (error) {
-          Logger.warn(`Could not tell the merchant the order was paid: ${error instanceof Error ? error.message : 'unknown error'}`);
         }
         return {
           received: true,

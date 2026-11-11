@@ -2,6 +2,7 @@ package expo.modules.hypakeyboardstorage
 
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.File
 
 class HypaKeyboardStorageModule : Module() {
   override fun definition() = ModuleDefinition {
@@ -46,6 +47,13 @@ class HypaKeyboardStorageModule : Module() {
       val events = HypaKeyboardSharedPrefs.drainDebugEvents(ctx)
       events.forEach { sendEvent("debugLog", it) }
       events
+    }
+
+    AsyncFunction("savePicture") { uri: String, mime: String ->
+      val ctx =
+        appContext.reactContext?.applicationContext
+          ?: throw IllegalStateException("HypaKeyboardStorage: React context not ready")
+      HypaPictureSaver.save(ctx, File(android.net.Uri.parse(uri).path!!), mime)
     }
   }
 }

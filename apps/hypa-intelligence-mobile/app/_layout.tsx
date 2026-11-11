@@ -6,6 +6,7 @@ import { SettingsProvider } from '@/context/settings-context';
 import { PushRegistration } from '@/components/push-registration';
 import { NAV_THEME } from '@/lib/theme';
 import { ToastProvider } from '@/lib/toast';
+import { BridgePush } from '@/components/modules/bridge/bridge-push';
 import { queryClient } from '@/lib/query-client';
 import { ThemeProvider } from '@react-navigation/native';
 import { PortalHost } from '@rn-primitives/portal';
@@ -26,8 +27,12 @@ import {
 } from '@expo-google-fonts/outfit';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useUniwind } from 'uniwind';
 import { useEffect } from 'react';
+import { AppState, Platform } from 'react-native';
+import { reopenTracker } from '@hypa/config/analytics-native';
+import { analytics } from '@/lib/analytics';
 import { captureInstallReferralCode } from '@/lib/install-referrer';
 import { captureClipboardReferralCode } from '@/lib/clipboard-referrer';
 
@@ -35,8 +40,24 @@ export {
   ErrorBoundary,
 } from 'expo-router';
 
+/** iOS shows the system page sheet; Android has none, so it slides up full screen. */
+const SHEET = {
+  presentation: 'modal',
+  animation: Platform.OS === 'android' ? 'slide_from_bottom' : 'default',
+} as const;
+
 export default function RootLayout() {
   const { theme } = useUniwind();
+
+  useEffect(() => {
+    analytics.start();
+    const subscription = AppState.addEventListener(
+      'change',
+      reopenTracker(() => analytics.appOpened())
+    );
+
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -75,21 +96,28 @@ export default function RootLayout() {
           <DictionarySearchProvider>
             <ThemeProvider value={NAV_THEME[theme ?? 'light']}>
               <GestureHandlerRootView style={{ flex: 1 }}>
-                <SafeAreaProvider>
-                  <ToastProvider>
-                    <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-                    <PushRegistration />
-                    <Stack screenOptions={{ headerShown: false }}>
-                      <Stack.Screen name="(entry)" options={{ headerShown: false }} />
-                      <Stack.Screen name="refer" options={{ headerShown: false }} />
-                      <Stack.Screen
-                        name="lens"
-                        options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'fade' }}
-                      />
-                      <Stack.Screen name="+not-found" />
-                    </Stack>
-                  </ToastProvider>
-                </SafeAreaProvider>
+                <KeyboardProvider>
+                  <SafeAreaProvider>
+                    <ToastProvider>
+                      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+                      <PushRegistration />
+                      <BridgePush />
+                      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+                        <Stack.Screen name="(entry)" options={{ headerShown: false }} />
+                        <Stack.Screen name="refer" options={{ headerShown: false }} />
+                        <Stack.Screen
+                          name="lens"
+                          options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'fade' }}
+                        />
+                        {/* Profile and History open as sheets from the bottom, like Chat history. */}
+                        <Stack.Screen name="profile" options={SHEET} />
+                        <Stack.Screen name="translate-history" options={SHEET} />
+                        <Stack.Screen name="dictionary-history" options={SHEET} />
+                        <Stack.Screen name="+not-found" />
+                      </Stack>
+                    </ToastProvider>
+                  </SafeAreaProvider>
+                </KeyboardProvider>
               </GestureHandlerRootView>
               <PortalHost />
             </ThemeProvider>

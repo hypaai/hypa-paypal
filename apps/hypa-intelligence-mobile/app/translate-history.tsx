@@ -33,7 +33,7 @@ import {
   type TranslationHistoryResponse,
 } from '@/lib/product-api';
 import { useThemeColors } from '@/hooks/use-theme-color';
-import { goBackOrReturnTo, withReturnTo } from '@/lib/navigation';
+import { goBackOrReturnTo } from '@/lib/navigation';
 import { BackButton } from '@/components/shared/back-button';
 
 type Segment = { text: string; bold: boolean; italic: boolean };
@@ -162,8 +162,9 @@ const TranslateHistory = () => {
     { key: 'bookmarks' as const, label: 'Bookmarks' },
   ];
 
+  // Closes the sheet back to Translate and fills it with this item.
   const openItem = (item: TranslationHistoryItem) => {
-    router.replace({
+    router.dismissTo({
       pathname: '/(dashboard)/translate',
       params: {
         historySourceLang: item.sourceLanguage,
@@ -171,7 +172,6 @@ const TranslateHistory = () => {
         historySourceText: item.originalText,
         historyTranslatedText: item.translatedText,
         historyId: item.id,
-        ...withReturnTo('/translate-history'),
       },
     } as any);
   };
@@ -343,7 +343,7 @@ const TranslateHistory = () => {
     <Body showBackground={false} enableScroll={false}>
       <View className="flex-1 px-1 pt-4">
         <View className="mb-5 flex-row items-center justify-between">
-          <BackButton onPress={() => goBackOrReturnTo(returnTo, '/(dashboard)/translate')} />
+          <BackButton close onPress={() => goBackOrReturnTo(returnTo, '/(dashboard)/translate')} />
           <Text className="text-[20px] text-zinc-900 dark:text-zinc-50" style={{ fontFamily: FONTS.main.medium }}>
             Translate History
           </Text>

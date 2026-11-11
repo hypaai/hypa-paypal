@@ -53,3 +53,7 @@ export default webStub;
 export async function startKeyboardMic(): Promise<void> {}
 
 export function stopKeyboardMic(): void {}
+
+export async function savePicture(): Promise<void> {
+  throw new Error('Saving pictures works in the Hypa app.');
+}

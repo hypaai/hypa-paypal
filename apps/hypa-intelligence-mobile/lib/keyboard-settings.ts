@@ -10,7 +10,6 @@ import {
   APPEARANCES,
   DEFAULT_DICTIONARY_MODEL,
   DEFAULT_MODEL_PROVIDER,
-  DEFAULT_STT_MODEL,
   DEFAULT_TTS_MODEL,
   DEFAULT_TRANSLATION_MODEL,
   THEME_PRESETS,
@@ -34,8 +33,8 @@ export const DEFAULT_KEYBOARD_SETTINGS: KeyboardSettings = {
   dictionaryModel: DEFAULT_DICTIONARY_MODEL,
   ttsProvider: DEFAULT_MODEL_PROVIDER,
   ttsModel: DEFAULT_TTS_MODEL,
-  sttProvider: DEFAULT_MODEL_PROVIDER,
-  sttModel: DEFAULT_STT_MODEL,
+  sttProvider: 'auto',
+  sttModel: 'auto',
   assistantProvider: 'meta',
   assistantModel: 'muse-spark-1.3',
   voice: 'Eniola',
@@ -62,6 +61,7 @@ export const DEFAULT_KEYBOARD_SETTINGS: KeyboardSettings = {
     'CLIPBOARD',
     'LANGUAGES',
     'EMOJI',
+    'LENS',
     'SETTINGS',
   ],
   usageStats: {
@@ -93,6 +93,12 @@ function savedServiceModel(
   if (!savedModel) return { provider: fallbackProvider, model: fallbackModel };
   const savedProvider =
     typeof provider === 'string' && provider.trim() ? provider : fallbackProvider;
+  if (
+    group === 'ASR' &&
+    (savedProvider.toLowerCase() === 'auto' || savedModel.toLowerCase() === 'auto')
+  ) {
+    return { provider: 'auto', model: 'auto' };
+  }
   return resolveProviderModelForGroup(group, savedProvider, savedModel);
 }
 
