@@ -20,3 +20,4 @@ allowBuilds:
   msgpackr-extract: true
   prisma: true
   protobufjs: false
+  "@parcel/watcher": false
