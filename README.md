@@ -12,6 +12,7 @@ MIT licensed. See [LICENSE](LICENSE).
 ## Table of contents
 
 - [How it works](#how-it-works)
+- [Try it as a hackathon judge](#try-it-as-a-hackathon-judge)
 - [What you will need](#what-you-will-need)
 - [Quick path](#quick-path)
 - [Project components](#project-components)
@@ -57,6 +58,30 @@ MIT licensed. See [LICENSE](LICENSE).
 **Payment flow.** Merchant message → agent saves a **draft** order → merchant taps **Approve** (no model or customer can do this for them) → API creates a PayPal checkout → customer gets a payment link → PayPal calls the API's webhook (signature verified) → order becomes paid.
 
 **Bridge flow.** Customer WhatsApp message → webhook (signature verified) → queue → assistant writes a reply using only the owner's business profile → the reply waits as a **draft** for the owner (or goes out directly if the owner turned on automatic answers) → customer receives it.
+
+## Try it as a hackathon judge
+
+You can try the whole flow on the hosted API (`https://api.hypaintelligence.com`) without running anything locally. A judge login (an email and password) is given in the hackathon submission.
+
+**Why a login is given.** Hypa Bridge normally lets any business connect its own WhatsApp number. Meta has not finished verifying Hypa's business during the hackathon, so a merchant cannot add a number of their own yet. Hypa instead gives the judge login the WhatsApp **test number** that Meta provides for development. That login is the only account allowed to take it (`WHATSAPP_CONNECT_EMAILS`), and the test number only exchanges messages with phones on its recipient list in Hypa's Meta app, so ask us to add the number you will test with.
+
+**Try it.**
+
+1. Open the Hypa Intelligence app and sign in with the judge login.
+2. Go to **Settings → Hypa Bridge → Connect your number**, fill in the business profile (name, what you sell, a price list in **USD**, EUR or GBP), and tap **Connect WhatsApp**. The app shows the number to write to.
+3. From WhatsApp, message that number, for example `hi, I want 2 agbada by Friday`.
+4. The assistant answers from the profile only and records the order. The app shows a push notification and an **Approve** card in the customer's chat.
+5. Tap **Approve**. The customer gets a PayPal sandbox link in their language, and pays with a PayPal sandbox buyer account.
+6. PayPal tells the API, the order becomes **paid**, and the customer gets a receipt on WhatsApp. Paying from the app returns you to the app.
+
+**What you will see.**
+
+- **Customer side (WhatsApp):** a reply from the business assistant that quotes only the listed prices; a message that the business is confirming the order; then the PayPal link in the customer's language (amount, currency and link unchanged); then a receipt.
+- **Owner side (the app):** under **Hypa Bridge**, the customer appears in **Chat**. Each reply the assistant writes waits as a **draft** to **Send**, **Edit** or **Discard** (turn on **Answer simple questions automatically** to skip this for simple answers). An order shows an approval card; nothing payable goes out until you tap **Approve**. If you close the card by mistake, open it again from the chat, and use **Send payment link to customer** to resend the link.
+- **Things the assistant hands to you:** a discount, a refund, a complaint or an item that is not on the price list. It never invents a price.
+- **PayPal currencies:** PayPal does not support NGN, GHS or XOF. Use USD, EUR or GBP, otherwise the owner is told to arrange payment with the customer.
+
+**Set it up yourself.** To run the same flow on your own machine, follow [Use Hypa Bridge with the simulator](#11-use-hypa-bridge-with-the-simulator) (no Meta account needed), or [Connect a real WhatsApp number](#connect-a-real-whatsapp-number) to use Meta's test number.
 
 ## What you will need
 
@@ -499,7 +524,8 @@ Hypa runs one Meta app and its own WhatsApp number(s). Businesses never handle a
 2. In `apps/hypa-api/.env`, set `WHATSAPP_APP_SECRET` (Meta app secret), `WHATSAPP_VERIFY_TOKEN` (any string you choose), `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_IDS` (the phone number ID; add more ids, comma separated, for more businesses). **Remove** `WHATSAPP_GRAPH_URL`. Restart the API.
 3. Expose your API publicly (for example `ngrok http 5678`). In Meta's **WhatsApp → Configuration**, set the callback to `https://<your-public-url>/v2/whatsapp/webhook`, use the same verify token, and subscribe to `messages`.
 4. In the app, open **Settings → Hypa Bridge**, fill in the business and tap **Connect WhatsApp**. Message the Meta test number from the phone you added in step 1.
-5. Create and get approved an `en` message template named `quote_ready` (or set `WHATSAPP_QUOTE_TEMPLATE` and `WHATSAPP_QUOTE_TEMPLATE_LANGUAGE`). It is used for replies sent after the 24-hour window. The Meta test number can only message phones you added in step 1.
+5. For payments, set the PayPal sandbox keys from [section 7](#7-configure-paypal-sandbox) (`PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `PAYPAL_ENVIRONMENT=sandbox`) and set `FRONTEND_URL` to a public HTTPS address of the web app, so PayPal can return the customer. Only emails in `WHATSAPP_CONNECT_EMAILS` can take the number, so add yours.
+6. Create and get approved an `en` message template named `quote_ready` (or set `WHATSAPP_QUOTE_TEMPLATE` and `WHATSAPP_QUOTE_TEMPLATE_LANGUAGE`). It is used for replies sent after the 24-hour window. For payments, approve two more templates: `invoice_ready` (body: `{{1}}` amount, `{{2}}` link) and `payment_received` (body: `{{1}}` amount), or set `WHATSAPP_PAYMENT_LINK_TEMPLATE` and `WHATSAPP_PAYMENT_RECEIPT_TEMPLATE`. Inside 24 hours no template is needed. The Meta test number can only message phones you added in step 1.
 
 ## WhatsApp order to PayPal in one file
 
