@@ -36,12 +36,24 @@ const PaymentReceiptPage = () => {
   // own order reference separately and that reference does not authorize reads.
   const [receiptToken] = useState(() => params.get("receipt") ?? "");
   const cancelled = params.get("checkout") === "cancel";
+  // Set when the payer started in the Hypa app, so they go back into it.
+  const [appLink] = useState(() =>
+    id && receiptToken && params.get("from") === "app"
+      ? `hypaintelligence://pay/${encodeURIComponent(id)}?receipt=${encodeURIComponent(receiptToken)}`
+      : "",
+  );
 
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [loading, setLoading] = useState(Boolean(id && receiptToken));
   const [checking, setChecking] = useState(false);
   const [polls, setPolls] = useState(0);
   const reconcileStarted = useRef(false);
+
+  useEffect(() => {
+    if (appLink && /android|iphone|ipad/i.test(navigator.userAgent)) {
+      window.location.href = appLink;
+    }
+  }, [appLink]);
 
   useLayoutEffect(() => {
     if (!params.has("receipt")) return;
@@ -238,6 +250,15 @@ const PaymentReceiptPage = () => {
               </div>
             ) : null}
           </dl>
+        ) : null}
+
+        {appLink ? (
+          <a
+            className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-primary text-sm font-medium text-primary-foreground"
+            href={appLink}
+          >
+            Open in the Hypa app
+          </a>
         ) : null}
 
         {!loading && (state === "processing" || state === "unconfirmed") ? (

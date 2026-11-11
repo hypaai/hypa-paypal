@@ -67,7 +67,7 @@ You can try the whole flow on the hosted API (`https://api.hypaintelligence.com`
 
 **Try it.**
 
-1. Open the Hypa Intelligence app and sign in with the judge login.
+1. Install the Hypa Intelligence app from the link in the hackathon submission (or build it yourself with [section 9](#9-configure-and-run-the-mobile-app), pointed at `https://api.hypaintelligence.com`), and sign in with the judge login.
 2. Go to **Settings → Hypa Bridge → Connect your number**, fill in the business profile (name, what you sell, a price list in **USD**, EUR or GBP), and tap **Connect WhatsApp**. The app shows the number to write to.
 3. From WhatsApp, message that number, for example `hi, I want 2 agbada by Friday`.
 4. The assistant answers from the profile only and records the order. The app shows a push notification and an **Approve** card in the customer's chat.
