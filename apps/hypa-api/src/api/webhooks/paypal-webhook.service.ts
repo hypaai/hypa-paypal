@@ -3,12 +3,14 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from 'src/generated/prisma/client';
 import { payments } from '@hypa/config/payments';
 import { PayPalProvider } from '@hypa/paypal-agent';
 import { DbService } from 'src/libs/db/db.service';
 import { DeveloperSharedService } from '../developer/providers/shared.service';
+import { PaymentNotifier } from './payment-notifier.service';
 import { createHash } from 'node:crypto';
 
 
@@ -21,6 +23,7 @@ export class PayPalWebhookService {
   constructor(
     private readonly db: DbService,
     private readonly shared: DeveloperSharedService,
+    @Optional() private readonly notifier?: PaymentNotifier,
   ) {}
 
   async handle(headers: Record<string, string | string[] | undefined>, rawBody: string | Buffer) {
@@ -184,6 +187,7 @@ export class PayPalWebhookService {
           received: true,
           status: 'paid',
           merchantId: payment.order.merchantId,
+          orderId: payment.orderId,
           ...(warning ? { warning } : {}),
         };
       });
@@ -200,6 +204,14 @@ export class PayPalWebhookService {
           await this.shared.invalidateUserBalanceCache(result.merchantId);
         } catch {
           Logger.warn('Commerce wallet balance cache invalidation failed');
+        }
+        // Settled already, so a failure here is logged and never undoes or retries the payment.
+        try {
+          if ('orderId' in result && typeof result.orderId === 'string') {
+            await this.notifier?.orderPaid(result.orderId);
+          }
+        } catch (error) {
+          Logger.warn(`Could not tell the merchant the order was paid: ${error instanceof Error ? error.message : 'unknown error'}`);
         }
         return {
           received: true,

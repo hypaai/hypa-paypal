@@ -64,6 +64,7 @@
       "expo-router",
       "expo-apple-authentication",
       "expo-dev-client",
+      "expo-notifications",
       "./plugins/hypa-keyboard-android-ime/app.plugin.js",
       "expo-video",
       [

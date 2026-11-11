@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { approvalLabels, formatApprovalAmount, lineTotal } from "../src/payment-approval";
+import { approvalLabels, formatApprovalAmount, lineTotal, paidMessage } from "../src/payment-approval";
 
 // Locales separate groups with a no-break space; the test compares plain spaces.
 const plain = (text: string) => text.replace(/[  ]/g, " ");
@@ -68,5 +68,32 @@ describe("approval labels", () => {
         assert.ok(value.trim(), `${code}.${key} is empty`);
       }
     }
+  });
+});
+
+describe("the paid message", () => {
+  it("says who paid and how much, in the merchant's language", () => {
+    assert.equal(paidMessage("en", "Ada", "25", "USD"), "Ada has paid 25.00 USD.");
+    assert.equal(plain(paidMessage("fr", "Ada", "1234.5", "EUR")), "Ada a payé 1 234,50 EUR.");
+    assert.equal(paidMessage("es", "Ada", "25", "USD"), "Ada ha pagado 25,00 USD.");
+    assert.equal(paidMessage("pcm", "Ada", "25", "USD"), "Ada don pay 25.00 USD.");
+  });
+
+  it("uses the base language of a regional code, and English for a language with no line", () => {
+    assert.equal(paidMessage("fr-CA", "Ada", "25", "USD"), paidMessage("fr", "Ada", "25", "USD"));
+    assert.equal(paidMessage("sw", "Ada", "25", "USD"), paidMessage("en", "Ada", "25", "USD"));
+    assert.equal(paidMessage(null, "Ada", "25", "USD"), paidMessage("en", "Ada", "25", "USD"));
+  });
+
+  it("has a line for every language the approval card has", () => {
+    for (const code of ["en", "fr", "yo", "ig", "ha", "pcm", "es", "pt"]) {
+      const text = paidMessage(code, "Ada", "25", "USD");
+      assert.ok(text.includes("Ada") && text.includes("25"), code);
+      assert.ok(!text.includes("{"), `${code} left a placeholder`);
+    }
+  });
+
+  it("keeps a customer name exactly, even one that looks like a replacement pattern", () => {
+    assert.equal(paidMessage("en", "$& Ltd", "25", "USD"), "$& Ltd has paid 25.00 USD.");
   });
 });

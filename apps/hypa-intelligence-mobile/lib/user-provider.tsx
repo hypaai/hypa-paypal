@@ -1,4 +1,5 @@
 import { getUser } from '@/api/user';
+import { unregisterPush } from '@/lib/push';
 import { LoadingState } from '@/components/modules/auth-states';
 import Body from '@/components/shared/body';
 import { useKeyboardSettings } from '@/hooks/use-keyboard-settings';
@@ -42,6 +43,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     loading: userQ.isLoading,
     logout: async () => {
       if (settings) {
+        if (settings.token) await unregisterPush(settings.token).catch(() => undefined);
         await setSettings({
           ...settings,
           token: '',
