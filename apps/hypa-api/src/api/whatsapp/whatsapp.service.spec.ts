@@ -83,7 +83,7 @@ function setup(options: { numberRow?: Partial<typeof number> | null; threadRow?:
   };
   const media = { get: jest.fn().mockResolvedValue(Buffer.from('audio')) };
   const push = { notify: jest.fn().mockResolvedValue(undefined) };
-  const service = new WhatsappService(db as never, agent as never, media as never, push as never);
+  const service = new WhatsappService(db as never, agent as never, media as never, push as never, {} as never);
   return { service, db, agent, media, push };
 }
 

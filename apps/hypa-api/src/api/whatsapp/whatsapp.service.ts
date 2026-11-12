@@ -8,6 +8,7 @@ import { decryptString, encryptString } from 'src/utils/encryption.utils';
 import { Prisma } from 'src/generated/prisma/client';
 import { AgentMediaService } from '../agent/agent.media';
 import { AgentService } from '../agent/agent.service';
+import { CommerceService } from '../commerce/commerce.service';
 import { PushService } from '../push/push.service';
 import { businessProfileSchema, hoursText, unlistedAmounts, type BusinessProfile } from './bridge.profile';
 import { bridgeTools, type RecordedOrder } from './bridge.tools';
@@ -76,6 +77,7 @@ export class WhatsappService {
     private readonly agent: AgentService,
     private readonly media: AgentMediaService,
     private readonly push: PushService,
+    private readonly commerce: CommerceService,
   ) {}
 
   /** Keeps the messages not seen before. Meta can deliver the same message twice, and a duplicate must run once. */
@@ -120,7 +122,10 @@ export class WhatsappService {
     const tools = bridgeTools({
       profile: profile.data,
       customer: { name: thread.customer_name ?? 'WhatsApp customer', contact: `whatsapp:${thread.customer_hash.slice(0, 24)}` },
-      openOrderId: () => this.openOrderOf(thread.id),
+      openOrder: () => this.openOrderOf(thread.id),
+      cancelOrder: async (orderId) => {
+        await this.commerce.updateOrderStatus(number.userId, orderId, 'cancelled');
+      },
       linkOrder: async (orderId) => {
         await this.db.whatsapp_order.upsert({ where: { order_id: orderId }, create: { order_id: orderId, threadId: thread.id }, update: {} });
       },
@@ -283,11 +288,11 @@ export class WhatsappService {
     };
   }
 
-  private async openOrderOf(threadId: string): Promise<string | undefined> {
+  private async openOrderOf(threadId: string) {
     const linked = await this.db.whatsapp_order.findMany({ where: { threadId }, select: { order_id: true } });
     if (!linked.length) return undefined;
-    const open = await this.db.commerce_order.findFirst({ where: { id: { in: linked.map((row) => row.order_id) }, status: 'draft' }, select: { id: true } });
-    return open?.id;
+    const open = await this.db.commerce_order.findFirst({ where: { id: { in: linked.map((row) => row.order_id) }, status: 'draft' }, select: { id: true, amount: true, items: true } });
+    return open ? { id: open.id, amount: open.amount.toString(), items: open.items } : undefined;
   }
 
   private prompt(profile: BusinessProfile, customerName: string | null) {

@@ -31,7 +31,8 @@ export function bridgeTools(context: {
   customer: { name: string; contact: string };
   saveOrder: (order: RecordedOrder) => Promise<void>;
   /** The payable order this chat still has waiting for the owner, if any. */
-  openOrderId: () => Promise<string | undefined>;
+  openOrder: () => Promise<{ id: string; amount: string; items: unknown } | undefined>;
+  cancelOrder: (orderId: string) => Promise<void>;
   linkOrder: (orderId: string) => Promise<void>;
   askOwner: (reason: string) => Promise<void>;
 }): HypaTool[] {
@@ -69,10 +70,15 @@ export function bridgeTools(context: {
           await context.askOwner(message);
           return { ...saved, status: 'owner_arranges_payment' as const, message };
         }
-        const waiting = await context.openOrderId();
-        if (waiting) return { ...saved, status: 'awaiting_owner_approval' as const, orderId: waiting };
-
         const lines = order.items.map((item) => ({ name: item.name, qty: item.qty, unitPrice: String(orderLinePrice(context.profile, item)) }));
+        // An unchanged order keeps its place with the owner. A changed one replaces it, so the owner never approves a total the customer was not quoted.
+        const waiting = await context.openOrder();
+        if (waiting) {
+          const same = Number(waiting.amount) === Number(total.toFixed(2)) && JSON.stringify(waiting.items) === JSON.stringify(lines);
+          if (same) return { ...saved, status: 'awaiting_owner_approval' as const, orderId: waiting.id };
+          await context.cancelOrder(waiting.id);
+        }
+
         // The shared `paypal` tool's create_order, so the order is made the same way as in Chat; the bridge only adds the price-list total.
         const paypal = HYPA_TOOLS.find((tool) => tool.name === 'paypal')!;
         const created = (await runHypaTool(paypal, executor, {
