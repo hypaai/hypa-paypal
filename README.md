@@ -58,24 +58,29 @@ MIT licensed. See [LICENSE](./LICENSE).
 
 **[labs.hypaintelligence.com/chat](https://labs.hypaintelligence.com/chat)** is Hypa's hosted build of this flow. Everything runs against the **PayPal sandbox**, so no real money moves. This repository is the full open-source version of it.
 
-The judge logins (email, or **Continue with Google**) are in the Devpost testing instructions.
+The judge logins (email, or **Continue with Google**) are in the Devpost testing instructions. If Google asks to verify a new device, use the email login instead.
 
-**To pay as the customer,** use a PayPal sandbox **Personal** (buyer) account. Create one for free at [developer.paypal.com](https://developer.paypal.com/) → **Testing Tools → Sandbox Accounts**. Open the payment link in a private or incognito window, so you are not signed in as the merchant.
+**To pay as the customer,** use a PayPal sandbox **Personal** (buyer) account: the pre-created one in the Devpost testing instructions, or your own, made for free at [developer.paypal.com](https://developer.paypal.com/) → **Testing Tools → Sandbox Accounts**. Open the payment link in a private or incognito window, so you are not signed in as the merchant.
 
-### Chat to PayPal (about 2 minutes)
+### Five-minute quick start: chat or voice to PayPal
 
 1. Open [labs.hypaintelligence.com/chat](https://labs.hypaintelligence.com/chat) and sign in with a judge login.
-2. Ask in any language, by text, voice or a photo of a handwritten order. For example: *Invoice Ada, ada@example.com, 20 USD for two bags at 10 USD each. She speaks Hausa.*
-3. Hypa drafts the order and shows an approval card with the items, the total and the Hypa fee. Nothing is payable yet.
-4. Tap **Approve order**, then **Copy payment link**. The message is in Hausa and ends with a PayPal sandbox link.
-5. Open the link in a private window and pay with the sandbox buyer account.
-6. The receipt page confirms the payment, and Hypa posts "Ada has paid 20.00 USD." in the chat.
+2. Create an order by text or by voice:
+   - **Text, English to Hausa.** Type: *Invoice Ada, ada@example.com, 20 USD for two bags at 10 USD each. She speaks Hausa.*
+   - **Voice, English to French.** Tap the microphone and say: *Invoice Peter, peter@example.com, 55 USD for two bags of peas at $30 each with $5 off. He speaks French.* Hypa transcribes the request, works out the discount and creates the order.
+
+   You can also try other languages, or attach a photo of a handwritten order.
+3. Hypa shows an approval card with the items, the total (including any discount) and the Hypa fee. Nothing is payable yet.
+4. Tap **Approve order**, then **Copy payment link**. The message is in the customer's language (Hausa or French) and ends with a PayPal sandbox link.
+5. Open the link in a private window, sign in to PayPal sandbox as the buyer, review the order and confirm the payment.
+6. The receipt page confirms the payment, and Hypa posts that the customer has paid in the merchant's chat (for example "Ada has paid 20.00 USD.").
 
 Things to try:
 
 - Leave out the amount. Hypa asks for it and creates nothing.
 - Tap **Approve order** twice quickly. The order is approved once.
 - Pay the same link twice. There is one payment and one fee.
+- Switch between text and voice, and try other customer languages.
 
 ### WhatsApp to PayPal (mobile app)
 
@@ -555,7 +560,7 @@ You can try the whole WhatsApp flow on the hosted API (`https://api.hypaintellig
 2. Go to **Settings → Hypa Bridge → Connect your number**, fill in the business profile (name, what you sell, a price list in **USD**, EUR or GBP), and tap **Connect WhatsApp**. The app shows the number to write to.
 3. From WhatsApp, message that number, for example `hi, I want 2 agbada by Friday`.
 4. The assistant answers from the profile only and records the order. The app shows a push notification and an **Approve** card in the customer's chat.
-5. Tap **Approve**. The customer gets a PayPal sandbox link in their language, and pays with a PayPal sandbox buyer account.
+5. Tap **Approve**. The customer gets a PayPal sandbox link on WhatsApp in their language. Open it in a private window and pay with the PayPal sandbox buyer account.
 6. PayPal tells the API, the order becomes **paid**, and the customer gets a receipt on WhatsApp.
 
 What you will see:
