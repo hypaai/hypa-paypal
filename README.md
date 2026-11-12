@@ -107,15 +107,19 @@ Safety rules:
 
 ## What was built during the hackathon
 
-Hypa's translation, speech, keyboard and agent features existed before the hackathon. Everything about payments was built during the submission period (from October 26, 2026):
+Before the hackathon, Hypa had a dictionary, translation, text-to-speech and speech recognition for African and other under-represented languages. Everything else in this repository was built during the submission period (from October 1, 2026):
 
+- **The AI agent:** Hypa's agent that plans and calls tools, using Hypa's own language models (translation, speech-to-text, text-to-speech, reading text in photos) as tools, so it works in 160 languages.
+- **MCP:** Hypa's tools served over MCP, so outside agents (Claude, ChatGPT, Codex, Muse Code) can use them, including payments.
+- **Chat:** the Chat tab in the Hypa Intelligence mobile app and the web chat, with voice, photo and text input.
+- **The Hypa Keyboard's agent features:** Ask Hypa from inside any chat app, including approving orders and typing in payment links.
 - [`@hypa/paypal-agent`](./packages/@hypa-paypal-agent): open-source payment contracts, the PayPal Orders v2 adapter, webhook verification and a fake provider.
 - The commerce data model and API: customers, orders, approval, checkout, receipts, reconciliation with PayPal, and the merchant fee.
 - The `paypal` agent tool with five actions, served to Hypa's agent and to outside agents over MCP.
 - Payment messages in the customer's language, with the amount and link protected from translation errors.
-- Approval cards in the mobile app, the web app and the iOS and Android keyboards.
+- Approval cards in the mobile app, the web app and the iOS and Android keyboards, which approve only the amount the merchant reviewed.
 - The PayPal webhook handler, capture after approval, the "customer has paid" chat message and push notifications.
-- The customer receipt page and merchant sign-in on the web.
+- The customer receipt page, and merchant sign-in with email or Google.
 - Hypa Bridge: Hypa's agent answering a business's customers on WhatsApp, with the owner's approval, and a local WhatsApp simulator.
 - Bridge Pay: a customer's WhatsApp order becomes a PayPal sandbox payment after the owner approves it, with the link and receipt sent on WhatsApp.
 - [`examples/whatsapp`](./examples/whatsapp/README.md): the WhatsApp-to-PayPal flow in one file.
