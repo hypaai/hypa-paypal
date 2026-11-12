@@ -56,13 +56,35 @@ MIT licensed. See [LICENSE](./LICENSE).
 
 ## Hosted demo
 
-**[labs.hypaintelligence.com](https://labs.hypaintelligence.com)** is Hypa's hosted build of this flow, running against the PayPal sandbox. This repository is the full open-source version of it.
+**[labs.hypaintelligence.com/chat](https://labs.hypaintelligence.com/chat)** is Hypa's hosted build of this flow. Everything runs against the **PayPal sandbox**, so no real money moves. This repository is the full open-source version of it.
 
-1. Open [labs.hypaintelligence.com](https://labs.hypaintelligence.com) and sign in with the sandbox merchant login from the Devpost testing instructions.
-2. In the chat, ask in any language, for example: *Invoice Ada, ada@example.com, 20 USD for two bags at 10 USD each. She speaks Hausa.*
-3. Check the approval card and tap **Approve order**.
-4. Tap **Share payment link** or **Copy payment link**, open the link in a private window, and pay with a PayPal sandbox **Personal** account.
-5. After paying, the receipt page shows the payment. Back in the chat, Hypa posts that the customer has paid.
+The judge logins (email, or **Continue with Google**) are in the Devpost testing instructions.
+
+**To pay as the customer,** use a PayPal sandbox **Personal** (buyer) account. Create one for free at [developer.paypal.com](https://developer.paypal.com/) → **Testing Tools → Sandbox Accounts**. Open the payment link in a private or incognito window, so you are not signed in as the merchant.
+
+### Chat to PayPal (about 2 minutes)
+
+1. Open [labs.hypaintelligence.com/chat](https://labs.hypaintelligence.com/chat) and sign in with a judge login.
+2. Ask in any language, by text, voice or a photo of a handwritten order. For example: *Invoice Ada, ada@example.com, 20 USD for two bags at 10 USD each. She speaks Hausa.*
+3. Hypa drafts the order and shows an approval card with the items, the total and the Hypa fee. Nothing is payable yet.
+4. Tap **Approve order**, then **Copy payment link**. The message is in Hausa and ends with a PayPal sandbox link.
+5. Open the link in a private window and pay with the sandbox buyer account.
+6. The receipt page confirms the payment, and Hypa posts "Ada has paid 20.00 USD." in the chat.
+
+Things to try:
+
+- Leave out the amount. Hypa asks for it and creates nothing.
+- Tap **Approve order** twice quickly. The order is approved once.
+- Pay the same link twice. There is one payment and one fee.
+
+### WhatsApp to PayPal (mobile app)
+
+Install the Hypa Intelligence app and sign in with a judge login:
+
+- iPhone: [TestFlight](https://testflight.apple.com/join/1u423Uz4)
+- Android: [Google Play](https://play.google.com/store/apps/details?id=com.hypaintelligence.hypaintelligence)
+
+Then follow [Try it as a hackathon judge](#try-it-as-a-hackathon-judge). Meta's WhatsApp test number only messages approved phones, so first send your WhatsApp number to [chris@hypaintelligence.com](mailto:chris@hypaintelligence.com) and we will add it.
 
 ## How the payment flow works
 
@@ -521,11 +543,11 @@ Finish steps 1 to 7 first. Install `ffmpeg` (`brew install ffmpeg`) if you want 
 
 ### Try it as a hackathon judge
 
-You can try the whole WhatsApp flow on the hosted API (`https://api.hypaintelligence.com`) without running anything locally. A judge login (an email and password) is given in the hackathon submission.
+You can try the whole WhatsApp flow on the hosted API (`https://api.hypaintelligence.com`) without running anything locally. The judge logins (email, or **Continue with Google**) are in the Devpost testing instructions.
 
-**Why a login is given.** Hypa Bridge normally lets any business connect its own WhatsApp number. Meta has not finished verifying Hypa's business during the hackathon, so a merchant cannot add a number of their own yet. Hypa instead gives the judge login the WhatsApp **test number** that Meta provides for development. That login is the only account allowed to take it (`WHATSAPP_CONNECT_EMAILS`), and the test number only exchanges messages with phones on its recipient list in Hypa's Meta app, so ask us to add the number you will test with.
+**Why a login is given.** Hypa Bridge normally lets any business connect its own WhatsApp number. Meta has not finished verifying Hypa's business during the hackathon, so a merchant cannot add a number of their own yet. Hypa instead gives the judge login the WhatsApp **test number** that Meta provides for development. That login is the only account allowed to take it (`WHATSAPP_CONNECT_EMAILS`), and the test number only exchanges messages with phones on its recipient list in Hypa's Meta app, so send the WhatsApp number you will test with to [chris@hypaintelligence.com](mailto:chris@hypaintelligence.com) and we will add it.
 
-1. Install the Hypa Intelligence app from the link in the hackathon submission (or build it yourself with [step 11](#11-run-the-mobile-app), pointed at `https://api.hypaintelligence.com`), and sign in with the judge login.
+1. Install the Hypa Intelligence app from [TestFlight](https://testflight.apple.com/join/1u423Uz4) (iPhone) or [Google Play](https://play.google.com/store/apps/details?id=com.hypaintelligence.hypaintelligence) (Android) (or build it yourself with [step 11](#11-run-the-mobile-app), pointed at `https://api.hypaintelligence.com`), and sign in with the judge login.
 2. Go to **Settings → Hypa Bridge → Connect your number**, fill in the business profile (name, what you sell, a price list in **USD**, EUR or GBP), and tap **Connect WhatsApp**. The app shows the number to write to.
 3. From WhatsApp, message that number, for example `hi, I want 2 agbada by Friday`.
 4. The assistant answers from the profile only and records the order. The app shows a push notification and an **Approve** card in the customer's chat.
