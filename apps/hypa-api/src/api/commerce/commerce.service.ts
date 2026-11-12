@@ -353,9 +353,6 @@ export class CommerceService {
         },
       });
     }
-    // A payer who started in the app comes back into it; a WhatsApp customer may not have the app.
-    const whatsappOrder = await this.db.whatsapp_order.findUnique({ where: { order_id: order.id }, select: { order_id: true } });
-    const fromApp = order.surface === 'app' && !whatsappOrder ? '&from=app' : '';
     let checkout: { providerRef: string; checkoutUrl: string };
     try {
       checkout = await this.paypal().createCheckout({
@@ -365,7 +362,7 @@ export class CommerceService {
         items,
         // PayPal's page only has some languages; without one it uses its own default.
         locale: (payments.methods.paypal.locales as Record<string, string>)[order.customer.language ?? ''],
-        returnUrl: `${frontendUrl}/pay/${encodeURIComponent(order.id)}?receipt=${encodeURIComponent(payment.receipt_token)}${fromApp}`,
+        returnUrl: `${frontendUrl}/pay/${encodeURIComponent(order.id)}?receipt=${encodeURIComponent(payment.receipt_token)}`,
         cancelUrl: `${frontendUrl}/pay/${encodeURIComponent(order.id)}?checkout=cancel`,
         idempotencyKey,
       });

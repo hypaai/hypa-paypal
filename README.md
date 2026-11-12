@@ -272,7 +272,7 @@ For a real iPhone, open `apps/hypa-intelligence-mobile/ios` in Xcode and choose 
 
 The app uses native modules (`expo-notifications`, `react-native-keyboard-controller`, the Hypa keyboard), so use a development build, not Expo Go. After pulling new changes, run `pnpm install`, then `pod install` in `apps/hypa-intelligence-mobile/ios` and rebuild. Add `EXPO_PUBLIC_POSTHOG_KEY` to `.env` only if you want usage analytics; empty turns it off.
 
-An order made in the app returns to `/pay/:id?receipt=<token>&from=app`. On a phone that page opens `hypaintelligence://pay/<id>?receipt=<token>`, and the app's `pay/[id]` screen shows the receipt. The return URL must be public HTTPS, not `localhost`, for a phone to reach it.
+The return URL must be public HTTPS, not `localhost`, for a phone to reach it.
 
 
 ## Try Hypa Bridge
@@ -291,8 +291,20 @@ You can try the whole flow on the hosted API (`https://api.hypaintelligence.com`
 2. Go to **Settings → Hypa Bridge → Connect your number**, fill in the business profile (name, what you sell, a price list in **USD**, EUR or GBP), and tap **Connect WhatsApp**. The app shows the number to write to.
 3. From WhatsApp, message that number, for example `hi, I want 2 agbada by Friday`.
 4. The assistant answers from the profile only and records the order. The app shows a push notification and an **Approve** card in the customer's chat.
-5. Tap **Approve**. The customer gets a PayPal sandbox link in their language, and pays with a PayPal sandbox buyer account.
-6. PayPal tells the API, the order becomes **paid**, and the customer gets a receipt on WhatsApp. Paying from the app returns you to the app.
+5. Tap **Approve**. The customer gets a PayPal sandbox link in their language and pays with a [sandbox buyer account](#paying-as-the-customer-sandbox-buyer-account).
+6. PayPal tells the API, the order becomes **paid**, and the customer gets a receipt on WhatsApp. The app shows a **Paid** receipt in the chat and a notification.
+
+#### Paying as the customer (sandbox buyer account)
+
+The customer pays on PayPal's sandbox, so the payer needs a **sandbox buyer account**, not a real PayPal login. No real money moves.
+
+- **Use one we provide.** If you do not have one, ask the Hypa team in the hackathon submission and we will send you a sandbox buyer email and password.
+- **Or create your own, free and in about two minutes:**
+  1. Sign in at [developer.paypal.com](https://developer.paypal.com/) (a normal PayPal login works) and switch to **Sandbox**.
+  2. Open **Testing Tools → Sandbox Accounts → Create account**.
+  3. Choose **Personal** (the buyer type), pick a country, and save. PayPal fills it with test money.
+  4. Open the account's **⋯ → View/Edit account** to read its email and password.
+- **Pay.** Open the payment link in a private window (so you are not signed in to your own PayPal), log in with the sandbox buyer, and approve. A business account cannot pay its own order.
 
 **What you will see.**
 
