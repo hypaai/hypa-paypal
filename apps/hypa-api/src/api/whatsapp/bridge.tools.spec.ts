@@ -10,20 +10,22 @@ const profile = businessProfileSchema.parse({
 
 const usdProfile = businessProfileSchema.parse({ ...profile, currency: 'USD', languages: ['English'], priceList: [{ name: 'Agbada', price: 45 }, { name: 'Cap', price: 5.5 }] });
 
-const setup = (options: { profile?: typeof profile; open?: string } = {}) => {
+const setup = (options: { profile?: typeof profile; open?: { id: string; amount: string; items: unknown } } = {}) => {
   const saved: unknown[] = [];
   const asked: string[] = [];
   const linked: string[] = [];
+  const cancelled: string[] = [];
   const tools = bridgeTools({
     profile: options.profile ?? profile,
     customer: { name: 'Ada', contact: 'whatsapp:abc' },
     saveOrder: async (order) => void saved.push(order),
-    openOrderId: async () => options.open,
+    openOrder: async () => options.open,
+    cancelOrder: async (orderId) => void cancelled.push(orderId),
     linkOrder: async (orderId) => void linked.push(orderId),
     askOwner: async (reason) => void asked.push(reason),
   });
   const tool = (name: string) => tools.find((entry) => entry.name === name)!;
-  return { saved, asked, linked, tool };
+  return { saved, asked, linked, cancelled, tool };
 };
 const executor = {} as never;
 const paying = () => ({ createOrder: jest.fn().mockResolvedValue({ orderId: 'order-1', amount: '95.50', currency: 'USD', status: 'draft', approvalUrl: 'https://hypa.test/approve' }) }) as never as { createOrder: jest.Mock };
@@ -81,13 +83,24 @@ describe('create_order', () => {
     expect(paid.createOrder.mock.calls[0][0].customerLanguage).toBeUndefined();
   });
 
-  it('makes no second order while one is waiting for the owner', async () => {
-    const { tool, linked } = setup({ profile: usdProfile, open: 'order-0' });
+  it('makes no second order while the same order is waiting for the owner', async () => {
+    const { tool, linked, cancelled } = setup({ profile: usdProfile, open: { id: 'order-0', amount: '11.000000', items: [{ name: 'Cap', qty: 2, unitPrice: '5.5' }] } });
     const paid = paying();
     const result = await runHypaTool(tool('create_order'), paid as never, { items: [{ name: 'Cap', qty: 2 }] });
     expect(result).toMatchObject({ status: 'awaiting_owner_approval', orderId: 'order-0' });
     expect(paid.createOrder).not.toHaveBeenCalled();
     expect(linked).toEqual([]);
+    expect(cancelled).toEqual([]);
+  });
+
+  it('replaces a waiting order the customer changed, so the owner approves the new total', async () => {
+    const { tool, linked, cancelled } = setup({ profile: usdProfile, open: { id: 'order-0', amount: '5.5', items: [{ name: 'Cap', qty: 1, unitPrice: '5.5' }] } });
+    const paid = paying();
+    const result = await runHypaTool(tool('create_order'), paid as never, { items: [{ name: 'Cap', qty: 2 }] });
+    expect(cancelled).toEqual(['order-0']);
+    expect(paid.createOrder.mock.calls[0][0]).toMatchObject({ amount: '11.00' });
+    expect(result).toMatchObject({ status: 'awaiting_owner_approval', orderId: 'order-1' });
+    expect(linked).toEqual(['order-1']);
   });
 
   it('leaves payment to the owner when PayPal cannot take the business currency', async () => {
