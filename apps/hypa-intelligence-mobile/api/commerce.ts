@@ -48,24 +48,3 @@ export const cancelCommerceOrder = async (token: string, orderId: string) => {
 
 export const createCommercePaymentLink = (token: string, orderId: string) =>
   createPaymentLink({ baseUrl: API_URL, token, orderId });
-
-export type PaymentReceipt = {
-  status: 'draft' | 'approved' | 'paid' | 'failed' | 'cancelled';
-  paymentStatus: 'pending' | 'paid' | 'failed' | null;
-  amount: string;
-  currency: string;
-  language: string;
-  reference: string | null;
-  merchant: string | null;
-};
-
-/** The payer's receipt: authorised by the token in PayPal's return link, not by a sign-in. */
-export async function getPaymentReceipt(orderId: string, receiptToken: string, reconcile = false): Promise<PaymentReceipt> {
-  const path = `/commerce/receipt/${encodeURIComponent(orderId)}`;
-  const headers = { 'X-Receipt-Token': receiptToken, Accept: 'application/json' };
-  // PayPal takes a moment to settle; asking the API to check with PayPal is what records the payment.
-  if (reconcile) await fetch(`${API_URL}${path}/reconcile`, { method: 'POST', headers }).catch(() => undefined);
-  const response = await fetch(`${API_URL}${path}`, { headers });
-  if (!response.ok) throw new Error('Could not load this receipt.');
-  return response.json() as Promise<PaymentReceipt>;
-}

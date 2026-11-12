@@ -60,7 +60,17 @@ MIT licensed. See [LICENSE](./LICENSE).
 
 The judge logins (email, or **Continue with Google**) are in the Devpost testing instructions. If Google asks to verify a new device, use the email login instead.
 
-**To pay as the customer,** use a PayPal sandbox **Personal** (buyer) account: the pre-created one in the Devpost testing instructions, or your own, made for free at [developer.paypal.com](https://developer.paypal.com/) → **Testing Tools → Sandbox Accounts**. Open the payment link in a private or incognito window, so you are not signed in as the merchant.
+### Paying as the customer (PayPal sandbox buyer account)
+
+The customer pays on PayPal's sandbox, so the payer needs a **sandbox buyer account**, not a real PayPal login. No real money moves.
+
+- **Use one we provide.** The pre-created buyer is in the Devpost testing instructions. If you do not have it, ask the Hypa team (the contact in this README) and we will send a sandbox buyer email and password.
+- **Or create your own, free, in about two minutes:**
+  1. Sign in at [developer.paypal.com](https://developer.paypal.com/) with a normal PayPal login and switch to **Sandbox**.
+  2. Open **Testing Tools → Sandbox Accounts → Create account**.
+  3. Choose **Personal** (the buyer type), pick a country, and save. PayPal fills it with test money.
+  4. Open the account's **⋯ → View/Edit account** to read its email and password.
+- **Pay.** Open the payment link in a private or incognito window, so you are not signed in as the merchant or as your own PayPal. Log in with the sandbox buyer and approve. A business account cannot pay its own order.
 
 ### Five-minute quick start: chat or voice to PayPal
 
@@ -270,7 +280,7 @@ PONG
 
 1. Sign in at [developer.paypal.com](https://developer.paypal.com/) and switch the dashboard to **Sandbox**.
 2. Open **Apps & Credentials**, create an app (or use the default one), and copy its **Client ID** and **Secret**.
-3. Open **Testing Tools → Sandbox Accounts** and note a **Personal** (buyer) account and its password. You will pay with it.
+3. Open **Testing Tools → Sandbox Accounts** and note a **Personal** (buyer) account and its password. You will pay with it. No buyer yet? See [Paying as the customer](#paying-as-the-customer-paypal-sandbox-buyer-account).
 
 Webhooks are optional for a local run: the receipt page checks the payment with PayPal itself. To receive real webhooks, see [step 10](#10-receive-paypal-webhooks-optional).
 
@@ -530,7 +540,7 @@ The app uses native modules (`expo-notifications`, `react-native-keyboard-contro
 
 For a real iPhone, open `apps/hypa-intelligence-mobile/ios` in Xcode and set your own Apple development team for signing before building. On a physical device, connect the device and computer to the same network and allow inbound TCP traffic on port `5678`.
 
-An order paid from the app returns to `/pay/<id>?receipt=<token>&from=app`. On a phone that page offers **Open in the Hypa app**, which opens `hypaintelligence://pay/<id>?receipt=<token>` and the app's receipt screen. It never jumps there on its own, because the payer is often a customer without the app. For a phone to reach that page, `FRONTEND_URL` must be a public HTTPS address, not `localhost`.
+The customer's receipt page is on the web and never links into the Hypa app. For a phone to reach it, `FRONTEND_URL` must be a public HTTPS address, not `localhost`.
 
 ## 12. Validate the keyboard
 
