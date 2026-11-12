@@ -781,6 +781,14 @@ Check the required values in [step 5](#required-local-values). `ENCRYPTION_KEY`,
 
 Enable `pgvector` in the database (see [step 2](#2-start-postgresql)).
 
+### `there is no unique or exclusion constraint matching the ON CONFLICT specification`
+
+Creating an order fails because the database was only partly built. This happens when `prisma db push` stops at the `vector` error and leaves some indexes missing. Enable `pgvector` (see [step 2](#2-start-postgresql)), then run `db push` again.
+
+### `Approval link must use HTTPS`
+
+The API only creates approval links on `https://` addresses or `localhost`. If `FRONTEND_URL` points at a LAN address such as `http://192.168.x.x`, set it back to `http://localhost:<port>`, or serve the web app over https with a tunnel.
+
 ### The web app cannot reach the API
 
 Check `VITE_PUBLIC_API_URL=/api` and `API_BASE_URL=http://localhost:5678` in `apps/hypa-intelligence/.env`, then restart the web app.
